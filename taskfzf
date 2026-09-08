@@ -27,30 +27,105 @@ Current context correctly. See https://github.com/GothenburgBitFactory/taskwarri
 To workaround the issue, use contexts without dashes (-) in your ~/.taskrc. The
 context parsed was $1
 
-Use \`A\` to add a task without attempting to get attributes from current context.
+Use \`a\` to add a task without attempting to get attributes from current context.
 EOF
 }
 
 basename="$(basename $0)"
 
+# --------------------------------------------------------------------------
+# Single source of truth for every key binding.
+#
+# Format: KIND|KEY|ARG|HELP
+# KIND values:
+#   task-act     - sets _TASKFZF_TASK_ACT=ARG and runs $0 with {+f}
+#   undo         - sets _TASKFZF_TASK_ACT=undo and runs $0 without args
+#   list-change  - sets _TASKFZF_LIST_CHANGE=ARG and runs $0
+#   reload       - sets _TASKFZF_INTERNAL=reload and runs $0
+#   show-keys    - sets _TASKFZF_SHOW=keys and runs $0 piped through less
+#   show-info    - sets _TASKFZF_TASK_ACT=information and runs $0 with {+f}
+#
+# Adding / removing / renaming a binding happens ONLY here. Both the fzf
+# --bind lines and the `?` help table are generated from this data.
+# --------------------------------------------------------------------------
+BINDINGS_DATA='
+task-act|D|do|Mark tasks as Done
+task-act|X|delete|Delete tasks
+undo|u|-|Undo last action
+task-act|E|edit|Edit selected tasks with $EDITOR
+task-act|a|add-popup|Add a new task in a popup prompt
+task-act|I|add-with-context|Add a new task, with context of the currently highlighted task
+task-act|A|append|Append to first selected task
+task-act|M|modify|Modify the first selected task
+task-act|s|toggle|Toggle start/stop on first selected task
+task-act|e|taskopen|Open first selected task in taskopen
+list-change|R|report|Change report
+list-change|C|context|Change context
+list-change|ctrl-c|context|Change context (alias for C)
+reload|ctrl-r|-|Reload the current report
+show-keys|?|-|Show this help
+show-info|enter|-|Show task information
+'
+
+# Emit one fzf --bind= argument for a single binding row.
+# Args: kind key arg
+gen_bind_arg() {
+	kind="$1"
+	key="$2"
+	arg="$3"
+	case "$kind" in
+		task-act)
+			printf -- '--bind=%s:execute(env _TASKFZF_TASK_ACT=%s %s {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true %s)' \
+				"$key" "$arg" "$0" "$0"
+			;;
+		undo)
+			printf -- '--bind=%s:execute(env _TASKFZF_TASK_ACT=undo %s < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true %s)' \
+				"$key" "$0" "$0"
+			;;
+		list-change)
+			printf -- '--bind=%s:execute(env _TASKFZF_LIST_CHANGE=%s %s)+reload(env _TASKFZF_RELOAD=true %s)' \
+				"$key" "$arg" "$0" "$0"
+			;;
+		reload)
+			printf -- '--bind=%s:reload(env _TASKFZF_INTERNAL=reload %s)' \
+				"$key" "$0"
+			;;
+		show-keys)
+			printf -- '--bind=%s:execute(env _TASKFZF_SHOW=keys %s | less)+print-query' \
+				"$key" "$0"
+			;;
+		show-info)
+			printf -- '--bind=%s:execute(env _TASKFZF_TASK_ACT=information %s {+f} | less)' \
+				"$key" "$0"
+			;;
+	esac
+}
+
+# Emit every fzf --bind= argument, one per line, derived from BINDINGS_DATA.
+# Output is consumed via $(gen_all_binds); command substitution + word
+# splitting turns each line into its own argument to fzf.
+gen_all_binds() {
+	printf '%s\n' "$BINDINGS_DATA" | while IFS='|' read -r kind key arg help; do
+		[ -z "$key" ] && continue
+		gen_bind_arg "$kind" "$key" "$arg"
+		printf '\n'
+	done
+}
+
+# Print the keys help table, derived from BINDINGS_DATA. Drives the
+# `?` binding display.
+print_keys_table() {
+	printf '%s\t%s\n' KEY Action
+	printf '%s\t%s\n' === ======
+	printf '%s\n' "$BINDINGS_DATA" | while IFS='|' read -r kind key arg help; do
+		[ -z "$key" ] && continue
+		printf '%s\t%s\n' "$key" "$help"
+	done
+}
+
+# Backwards-compatible alias for the env-var gate above.
 if [ "${_TASKFZF_SHOW}" = "keys" ]; then
-	printf 'KEY\tAction\n'
-	printf '===\t======\n'
-	printf 'D\t\tMark tasks as Done\n'
-	printf 'X\t\tDelete tasks\n'
-	printf 'U\t\tUndo last action\n'
-	printf 'E\t\tEdit selected tasks with $EDITOR\n'
-	printf 'T\t\tAdd a new task\n'
-	printf 'I\t\tAdd a new task, with context of the currently highlighted task\n'
-	printf 'A\t\tAppend to first selected task\n'
-	printf 'N\t\tAnnotate the first selected task\n'
-	printf 'M\t\tModify the first selected task\n'
-	printf 'R\t\tChange report\n'
-	printf 'C\t\tChange context\n'
-	printf 'ctrl-r\tReload the current report\n'
-	printf 'S\t\tStart task\n'
-	printf 'P\t\tStop task\n'
-	printf '?\t\tShow keys\n'
+	print_keys_table
 	exit 0
 fi
 
@@ -99,7 +174,7 @@ if [ -n "$_TASKFZF_TASK_ACT" ]; then
 	esac
 	# Other actions (such as edit / append etc) can't be used upon multiple tasks
 	case "$_TASKFZF_TASK_ACT" in
-		modify|append|annotate)
+		modify|append)
 			if [ "$tasks_args" != "${tasks_args%% *}" ]; then
 				tasks_args="${tasks_args%% *}"
 				clear
@@ -140,10 +215,36 @@ if [ -n "$_TASKFZF_TASK_ACT" ]; then
 					task "$context_attributes" "$attribute_args" add "$description_args"
 			esac
 			;;
-		append|modify|annotate)
+		add-popup)
+			# Single-line fzf popup prompt. --print-query emits the typed
+			# query on accept; an empty item list lets the user just type.
+			description=$(printf '\n' | fzf --prompt='Task description: ' --print-query --bind='enter:accept' --no-sort --height=1 </dev/tty)
+			if [ -n "$description" ]; then
+				task add "$description"
+			else
+				echo "${basename}: Add cancelled." >&2
+			fi
+			;;
+		append|modify)
 			echo "Run command:"
 			read -p "task $tasks_args $_TASKFZF_TASK_ACT " args
 			task $tasks_args "$_TASKFZF_TASK_ACT" "$args"
+			;;
+		toggle)
+			# Dispatch to start or stop based on whether the task is
+			# already started. The presence of a 'start' timestamp is
+			# the canonical signal that the task is currently active.
+			first_task="${tasks_args%% *}"
+			start_ts=$(task _get "${first_task}.start" 2>/dev/null)
+			if [ -z "$start_ts" ]; then
+				task "$first_task" start
+			else
+				task "$first_task" stop
+			fi
+			;;
+		taskopen)
+			# Pass the selected task UUID(s) to taskopen.
+			taskopen $tasks_args
 			;;
 		*)
 			task $tasks_args "$_TASKFZF_TASK_ACT"
@@ -152,17 +253,6 @@ if [ -n "$_TASKFZF_TASK_ACT" ]; then
 	# Prints a banner for after action view - it's a dirty and dumb version of
 	# piping to less.
 	echo ---------------------------------------------------------------------------
-	#echo End of \`task "$_TASKFZF_TASK_ACT"\` output. Press any key to continue
-	#read
-        #stty sane
-        #reset
-        #echo
-        #exit
-        #tput reset
-        #tput init
-        #tput reset
-        #emulate -L zsh
-        #set -
 	exit $?
 fi
 
@@ -257,27 +347,13 @@ while [ $? != 130 ]; do
 	# this same script with _TASKFZF_RELOAD=true, which prints the current
 	# filter's task list to stdout; fzf re-reads it as new input.
 	#
-	# - We use {+f} instead of {+} because it's easier to parse a file
-	# containing the lines chosen instead of one line containing all lines
-	# chosen given as a CLI argument
+	# - All --bind lines are generated programmatically from BINDINGS_DATA
+	# via gen_all_binds(); see the single source of truth at the top of
+	# the file. Adding / removing / renaming a binding happens there and
+	# only there.
 	$tw $tw_args | fzf --ansi \
 		--multi \
-		--bind="D:execute(env _TASKFZF_TASK_ACT=do $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)" \
-		--bind="X:execute(env _TASKFZF_TASK_ACT=delete $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)" \
-		--bind="U:execute(env _TASKFZF_TASK_ACT=undo $0< /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)" \
-		--bind="E:execute(env _TASKFZF_TASK_ACT=edit $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)" \
-		--bind="T:execute(env _TASKFZF_TASK_ACT=add $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)" \
-		--bind="I:execute(env _TASKFZF_TASK_ACT=add-with-context $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)" \
-		--bind="A:execute(env _TASKFZF_TASK_ACT=append $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)" \
-		--bind="N:execute(env _TASKFZF_TASK_ACT=annotate $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)" \
-		--bind="M:execute(env _TASKFZF_TASK_ACT=modify $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)" \
-		--bind="S:execute(env _TASKFZF_TASK_ACT=start $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)" \
-		--bind="P:execute(env _TASKFZF_TASK_ACT=stop $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)" \
-		--bind="R:execute(env _TASKFZF_LIST_CHANGE=report $0)+reload(env _TASKFZF_RELOAD=true $0)" \
-		--bind="C:execute(env _TASKFZF_LIST_CHANGE=context $0)+reload(env _TASKFZF_RELOAD=true $0)" \
-		--bind="ctrl-r:reload(env _TASKFZF_INTERNAL=reload $0)" \
-		--bind="?:execute(env _TASKFZF_SHOW=keys $0 | less)+print-query" \
-		--bind="enter:execute(env _TASKFZF_TASK_ACT=information $0 {+f} | less)"
+		$(gen_all_binds)
         # exit
         exit
 done

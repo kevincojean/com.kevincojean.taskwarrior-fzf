@@ -23,41 +23,65 @@ class Action(StrEnum):
     EDIT = "edit"
     ADD = "add"
     ADD_WITH_CONTEXT = "add-with-context"
+    ADD_POPUP = "add-popup"
     APPEND = "append"
-    ANNOTATE = "annotate"
     MODIFY = "modify"
     START = "start"
     STOP = "stop"
     UNDO = "undo"
+    TOGGLE = "toggle"
+    TASKOPEN = "taskopen"
     INFORMATION = "information"
 
 
 class Binding(StrEnum):
     D = "D"
     X = "X"
-    U = "U"
-    E = "E"
-    T = "T"
+    U_LOWER = "u"
+    E_UPPER = "E"
+    A_LOWER = "a"
     I = "I"
-    A = "A"
-    N = "N"
+    A_UPPER = "A"
+    E_LOWER = "e"
     M = "M"
+    S_LOWER = "s"
     R = "R"
     C = "C"
+    CTRL_C = "ctrl-c"
     CTRL_R = "ctrl-r"
-    S = "S"
-    P = "P"
     QUESTION = "?"
     ENTER = "enter"
 
 
+CURRENT_BINDINGS = frozenset({
+    (Binding.D, Action.DO),
+    (Binding.X, Action.DELETE),
+    (Binding.U_LOWER, Action.UNDO),
+    (Binding.E_UPPER, Action.EDIT),
+    (Binding.A_LOWER, Action.ADD_POPUP),
+    (Binding.I, Action.ADD_WITH_CONTEXT),
+    (Binding.A_UPPER, Action.APPEND),
+    (Binding.E_LOWER, Action.TASKOPEN),
+    (Binding.M, Action.MODIFY),
+    (Binding.S_LOWER, Action.TOGGLE),
+    (Binding.R, "report"),
+    (Binding.C, "context"),
+    (Binding.CTRL_C, "context"),
+    (Binding.CTRL_R, "reload"),
+    (Binding.QUESTION, "keys"),
+    (Binding.ENTER, Action.INFORMATION),
+})
+
+REMOVED_BINDINGS = frozenset({"U", "S", "P", "T", "N"})
+
+
 HAS_TASK = shutil.which("task") is not None
+HAS_TASKOPEN = shutil.which("taskopen") is not None
 REQUIRES_TASK = pytest.mark.skipif(not HAS_TASK, reason="task binary not installed")
+REQUIRES_TASKOPEN = pytest.mark.skipif(
+    not HAS_TASKOPEN, reason="taskopen binary not installed"
+)
 
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
 @pytest.fixture
 def taskfzf_path() -> Path:
@@ -66,7 +90,6 @@ def taskfzf_path() -> Path:
 
 @pytest.fixture
 def scratch_env(tmp_path: Path) -> dict[str, str]:
-    """Scratch env: TASKDATA+TASKRC+XDG_RUNTIME_DIR under tmp_path."""
     xdg = tmp_path / "xdgrun"
     xdg.mkdir()
     taskrc = tmp_path / "taskrc"
@@ -82,10 +105,6 @@ def scratch_env(tmp_path: Path) -> dict[str, str]:
     return env
 
 
-# ---------------------------------------------------------------------------
-# Runner
-# ---------------------------------------------------------------------------
-
 def run_taskfzf(
     base_env: dict[str, str],
     *,
@@ -96,6 +115,7 @@ def run_taskfzf(
     env = dict(base_env)
     if env_overrides:
         env.update(env_overrides)
+    env.setdefault("TERM", "xterm")
     bin_path = Path(__file__).parent / "taskfzf"
     return subprocess.run(
         [str(bin_path), *(args or [])],
@@ -105,10 +125,6 @@ def run_taskfzf(
         timeout=30,
     )
 
-
-# ---------------------------------------------------------------------------
-# Helpers (require task binary)
-# ---------------------------------------------------------------------------
 
 def _create_task(env: dict[str, str], description: str) -> str:
     proc = subprocess.run(
@@ -129,22 +145,6 @@ def _task_field(env: dict[str, str], task_id: str, field: str) -> str:
     return proc.stdout.strip()
 
 
-def _task_listing(env: dict[str, str], task_id: str) -> str:
-    proc = subprocess.run(
-        ["task", task_id, "list"],
-        capture_output=True, env=env, text=True, timeout=10,
-    )
-    return proc.stdout
-
-
-def _task_info(env: dict[str, str], task_id: str) -> str:
-    proc = subprocess.run(
-        ["task", "rc.verbose=nothing", task_id, "info"],
-        capture_output=True, env=env, text=True, timeout=10,
-    )
-    return proc.stdout
-
-
 def _newest_task_id(env: dict[str, str]) -> str:
     proc = subprocess.run(
         ["task", "rc.verbose=new-id", "list"],
@@ -156,23 +156,35 @@ def _newest_task_id(env: dict[str, str]) -> str:
     return nums[-1]
 
 
-# ---------------------------------------------------------------------------
-# A. Install prerequisites
-# ---------------------------------------------------------------------------
+def _keys_table(env: dict[str, str]) -> list[tuple[str, str]]:
+    proc = run_taskfzf(env, env_overrides={EnvVar.SHOW_KEYS: "keys"})
+    assert proc.returncode == 0, f"taskfzf keys exit={proc.returncode}: {proc.stderr!r}"
+    rows = []
+    for line in proc.stdout.decode().splitlines()[2:]:
+        if not line.strip():
+            continue
+        key, _, help_text = line.partition("\t")
+        rows.append((key, help_text))
+    return rows
+
+
+def _bindings_data_section(taskfzf_path: Path) -> str:
+    src = taskfzf_path.read_text()
+    match = re.search(r"BINDINGS_DATA='\n(.*?)\n'", src, re.DOTALL)
+    if not match:
+        raise AssertionError("BINDINGS_DATA not found in script source")
+    return match.group(1)
+
 
 def test_given_taskfzf_script_when_checked_then_is_executable(taskfzf_path: Path):
-    # AC-1: taskfzf exists at repo root and is executable
+    # AC-1
     assert taskfzf_path.is_file(), f"taskfzf missing at {taskfzf_path}"
     assert os.access(str(taskfzf_path), os.X_OK), "taskfzf is not executable"
 
 
-# ---------------------------------------------------------------------------
-# B. CLI forwarding
-# ---------------------------------------------------------------------------
-
 @REQUIRES_TASK
 def test_given_no_args_when_invoked_then_default_report_used(scratch_env: dict[str, str]):
-    # AC-3: no args forwards to task with no args
+    # AC-3
     _create_task(scratch_env, "ac3 seed")
     proc_tf = run_taskfzf(scratch_env, env_overrides={EnvVar.RELOAD: "true"})
     proc_task = subprocess.run(
@@ -182,7 +194,6 @@ def test_given_no_args_when_invoked_then_default_report_used(scratch_env: dict[s
     tf_first = next((l.strip() for l in proc_tf.stdout.decode().splitlines() if l.strip()), "")
     task_first = next((l.strip() for l in proc_task.stdout.splitlines() if l.strip()), "")
     if tf_first or task_first:
-        # Compare tokens (urgency column width may differ)
         assert tf_first.split() == task_first.split(), (
             f"taskfzf tokens {tf_first.split()!r} != task tokens {task_first.split()!r}"
         )
@@ -190,7 +201,7 @@ def test_given_no_args_when_invoked_then_default_report_used(scratch_env: dict[s
 
 @REQUIRES_TASK
 def test_given_report_arg_when_invoked_then_forwarded_to_task(scratch_env: dict[str, str]):
-    # AC-4: <report> argument forwards to task
+    # AC-4
     _create_task(scratch_env, "ac4 seed")
     proc_tf = run_taskfzf(
         scratch_env, env_overrides={EnvVar.RELOAD: "true"}, args=["next"]
@@ -208,7 +219,7 @@ def test_given_report_arg_when_invoked_then_forwarded_to_task(scratch_env: dict[
 
 @REQUIRES_TASK
 def test_given_rc_args_when_invoked_then_passed_through_to_task(scratch_env: dict[str, str]):
-    # AC-5: rc. args before report pass through to task
+    # AC-5
     _create_task(scratch_env, "ac5 seed")
     proc_tf = run_taskfzf(
         scratch_env,
@@ -222,19 +233,14 @@ def test_given_rc_args_when_invoked_then_passed_through_to_task(scratch_env: dic
     tf_first = next((l.strip() for l in proc_tf.stdout.decode().splitlines() if l.strip()), "")
     task_first = next((l.strip() for l in proc_task.stdout.splitlines() if l.strip()), "")
     if tf_first or task_first:
-        # Compare by whitespace-normalized tokens (column widths can differ).
         assert tf_first.split() == task_first.split(), (
             f"taskfzf first line tokens {tf_first.split()!r} != task first line tokens {task_first.split()!r}"
         )
 
 
-# ---------------------------------------------------------------------------
-# C. Action handlers
-# ---------------------------------------------------------------------------
-
 @REQUIRES_TASK
 def test_given_pending_task_when_D_invoked_then_marked_done(scratch_env: dict[str, str]):
-    # AC-6: D -> task <id> do
+    # AC-6
     tid = _create_task(scratch_env, "ac6 mark done")
     fixture = Path(scratch_env["TASKDATA"]) / "fixture.txt"
     fixture.write_text(f"{tid}\n")
@@ -249,7 +255,7 @@ def test_given_pending_task_when_D_invoked_then_marked_done(scratch_env: dict[st
 
 @REQUIRES_TASK
 def test_given_pending_task_when_X_invoked_then_deleted(scratch_env: dict[str, str]):
-    # AC-7: X -> task <id> delete
+    # AC-7
     tid = _create_task(scratch_env, "ac7 delete")
     fixture = Path(scratch_env["TASKDATA"]) / "fixture.txt"
     fixture.write_text(f"{tid}\n")
@@ -266,8 +272,8 @@ def test_given_pending_task_when_X_invoked_then_deleted(scratch_env: dict[str, s
 
 
 @REQUIRES_TASK
-def test_given_pending_task_when_E_invoked_then_edit_dispatched(scratch_env: dict[str, str]):
-    # AC-8: E -> task <id> edit (EDITOR=true to no-op the editor)
+def test_given_pending_task_when_E_upper_invoked_then_edit_dispatched(scratch_env: dict[str, str]):
+    # AC-8
     tid = _create_task(scratch_env, "ac8 edit")
     fixture = Path(scratch_env["TASKDATA"]) / "fixture.txt"
     fixture.write_text(f"{tid}\n")
@@ -287,8 +293,9 @@ def test_given_pending_task_when_E_invoked_then_edit_dispatched(scratch_env: dic
 
 
 @REQUIRES_TASK
-def test_given_no_task_when_T_invoked_then_new_task_added(scratch_env: dict[str, str]):
-    # AC-9: T -> task add (prompts for attrs then description)
+def test_given_no_task_when_add_action_invoked_then_new_task_added(scratch_env: dict[str, str]):
+    # AC-9: legacy add action still works via env var. T-004 / T-008 changed
+    # the user-facing binding, not the internal action verb.
     proc = run_taskfzf(
         scratch_env,
         env_overrides={EnvVar.TASK_ACT: Action.ADD},
@@ -306,11 +313,7 @@ def test_given_no_task_when_T_invoked_then_new_task_added(scratch_env: dict[str,
 
 @REQUIRES_TASK
 def test_given_context_set_when_I_invoked_then_task_added_with_context_attrs(scratch_env: dict[str, str]):
-    # AC-10: I -> task add with attributes from current context
-    # NOTE: taskrc syntax must be context.<name>=<rc-args>. The script does
-    # `task _get rc.context.<name>` and feeds the result as positional args to
-    # `task add`. The dotted form (context.<name>.<attr>=<val>) yields empty
-    # from _get and breaks the apply path.
+    # AC-10
     taskrc_path = Path(scratch_env["TASKRC"])
     with taskrc_path.open("a") as fh:
         fh.write("context.mycontext=project:work\n")
@@ -329,7 +332,7 @@ def test_given_context_set_when_I_invoked_then_task_added_with_context_attrs(scr
 
 @REQUIRES_TASK
 def test_given_pending_task_when_A_invoked_then_description_appended(scratch_env: dict[str, str]):
-    # AC-11: A -> task <id> append <stdin>
+    # AC-11
     tid = _create_task(scratch_env, "ac11 append")
     fixture = Path(scratch_env["TASKDATA"]) / "fixture.txt"
     fixture.write_text(f"{tid}\n")
@@ -344,25 +347,8 @@ def test_given_pending_task_when_A_invoked_then_description_appended(scratch_env
 
 
 @REQUIRES_TASK
-def test_given_pending_task_when_N_invoked_then_annotation_added(scratch_env: dict[str, str]):
-    # AC-12: N -> task <id> annotate <stdin>
-    tid = _create_task(scratch_env, "ac12 annotate")
-    fixture = Path(scratch_env["TASKDATA"]) / "fixture.txt"
-    fixture.write_text(f"{tid}\n")
-    marker = "ac12_marker_unique_xyz"
-    run_taskfzf(
-        scratch_env,
-        env_overrides={EnvVar.TASK_ACT: Action.ANNOTATE},
-        args=[str(fixture)],
-        stdin=f"{marker}\n",
-    )
-    info = _task_info(scratch_env, tid)
-    assert marker in info, f"annotation {marker!r} not found in info:\n{info}"
-
-
-@REQUIRES_TASK
 def test_given_pending_task_when_M_invoked_then_attribute_modified(scratch_env: dict[str, str]):
-    # AC-13: M -> task <id> modify <stdin>
+    # AC-13: N annotate removed by T-005, AC-12 is gone.
     tid = _create_task(scratch_env, "ac13 modify")
     fixture = Path(scratch_env["TASKDATA"]) / "fixture.txt"
     fixture.write_text(f"{tid}\n")
@@ -377,24 +363,24 @@ def test_given_pending_task_when_M_invoked_then_attribute_modified(scratch_env: 
 
 
 @REQUIRES_TASK
-def test_given_pending_task_when_S_invoked_then_started(scratch_env: dict[str, str]):
-    # AC-14: S -> task <id> start
-    tid = _create_task(scratch_env, "ac14 start")
+def test_given_pending_task_when_s_toggle_invoked_then_started(scratch_env: dict[str, str]):
+    # T-006: s toggle starts a pending task.
+    tid = _create_task(scratch_env, "ac14 toggle start")
     fixture = Path(scratch_env["TASKDATA"]) / "fixture.txt"
     fixture.write_text(f"{tid}\n")
     run_taskfzf(
         scratch_env,
-        env_overrides={EnvVar.TASK_ACT: Action.START},
+        env_overrides={EnvVar.TASK_ACT: Action.TOGGLE},
         args=[str(fixture)],
     )
     start_val = _task_field(scratch_env, tid, "start")
-    assert start_val, f"start timestamp empty after S action: {start_val!r}"
+    assert start_val, f"start timestamp empty after toggle: {start_val!r}"
 
 
 @REQUIRES_TASK
-def test_given_started_task_when_P_invoked_then_stopped(scratch_env: dict[str, str]):
-    # AC-15: P -> task <id> stop
-    tid = _create_task(scratch_env, "ac15 stop")
+def test_given_started_task_when_s_toggle_invoked_then_stopped(scratch_env: dict[str, str]):
+    # T-006: s toggle on a started task stops it.
+    tid = _create_task(scratch_env, "ac15 toggle stop")
     subprocess.run(
         ["task", tid, "start"],
         capture_output=True, env=scratch_env, timeout=10,
@@ -403,16 +389,16 @@ def test_given_started_task_when_P_invoked_then_stopped(scratch_env: dict[str, s
     fixture.write_text(f"{tid}\n")
     run_taskfzf(
         scratch_env,
-        env_overrides={EnvVar.TASK_ACT: Action.STOP},
+        env_overrides={EnvVar.TASK_ACT: Action.TOGGLE},
         args=[str(fixture)],
     )
     start_val = _task_field(scratch_env, tid, "start")
-    assert not start_val, f"start timestamp still {start_val!r} after P action"
+    assert not start_val, f"start timestamp still {start_val!r} after toggle stop"
 
 
 @REQUIRES_TASK
-def test_given_recent_action_when_U_invoked_then_action_undone(scratch_env: dict[str, str]):
-    # AC-16: U -> task undo
+def test_given_recent_action_when_u_invoked_then_action_undone(scratch_env: dict[str, str]):
+    # T-003: u replaces U for undo.
     tid = _create_task(scratch_env, "ac16 undo")
     subprocess.run(
         ["task", tid, "done"],
@@ -427,95 +413,103 @@ def test_given_recent_action_when_U_invoked_then_action_undone(scratch_env: dict
     assert "pending" in status.lower(), f"status={status!r} expected pending after undo"
 
 
-# ---------------------------------------------------------------------------
-# D. List / view bindings
-# ---------------------------------------------------------------------------
-
-def test_given_taskfzf_script_when_inspected_then_R_binding_changes_report(taskfzf_path: Path):
-    # AC-17: R binding changes the report
-    src = taskfzf_path.read_text()
-    assert (
-        '--bind="R:execute(env _TASKFZF_LIST_CHANGE=report $0)+reload(env _TASKFZF_RELOAD=true $0)"'
-        in src
-    ), "R bind string not found in script source"
-
-
-def test_given_taskfzf_script_when_inspected_then_C_binding_changes_context(taskfzf_path: Path):
-    # AC-18: C binding changes the context
-    src = taskfzf_path.read_text()
-    assert (
-        '--bind="C:execute(env _TASKFZF_LIST_CHANGE=context $0)+reload(env _TASKFZF_RELOAD=true $0)"'
-        in src
-    ), "C bind string not found in script source"
-
-
-def test_given_taskfzf_script_when_inspected_then_CTRL_R_binding_reloads(taskfzf_path: Path):
-    # AC-19: CTRL-R reloads current report without losing the filter
-    src = taskfzf_path.read_text()
-    assert (
-        '--bind="ctrl-r:reload(env _TASKFZF_INTERNAL=reload $0)"' in src
-    ), "ctrl-r bind string not found in script source"
-
-
-def test_given_question_binding_when_invoked_then_prints_keys_table(taskfzf_path: Path, scratch_env: dict[str, str]):
-    # AC-20: ? binding prints keys summary (bind string present + table renders)
-    src = taskfzf_path.read_text()
-    assert (
-        '--bind="?:execute(env _TASKFZF_SHOW=keys $0 | less)+print-query"' in src
-    ), "? bind string not found in script source"
-    proc = run_taskfzf(scratch_env, env_overrides={EnvVar.SHOW_KEYS: "keys"})
-    stdout = proc.stdout.decode()
-    assert stdout.startswith("KEY\tAction"), (
-        f"keys table first line wrong: {stdout.splitlines()[0] if stdout else '<empty>'!r}"
+@REQUIRES_TASK
+@REQUIRES_TASKOPEN
+def test_given_pending_task_when_e_invoked_then_taskopen_dispatched(scratch_env: dict[str, str]):
+    # T-002: e -> taskopen <id>. taskopen prints either "Attaching to task N"
+    # or "No actions applicable." depending on the task's metadata; either is
+    # proof of dispatch against the right task id.
+    tid = _create_task(scratch_env, "ac17 taskopen")
+    fixture = Path(scratch_env["TASKDATA"]) / "fixture.txt"
+    fixture.write_text(f"{tid}\n")
+    proc = run_taskfzf(
+        scratch_env,
+        env_overrides={EnvVar.TASK_ACT: Action.TASKOPEN},
+        args=[str(fixture)],
     )
-    first_tokens = {line.split("\t", 1)[0] for line in stdout.splitlines()}
-    for sym in [
-        Binding.D, Binding.X, Binding.U, Binding.E, Binding.T, Binding.I, Binding.A,
-        Binding.N, Binding.M, Binding.R, Binding.C, Binding.CTRL_R, Binding.S,
-        Binding.P, Binding.QUESTION,
-    ]:
-        assert sym in first_tokens, (
-            f"binding {sym!r} not in keys table (first tokens: {first_tokens!r})"
+    out = (proc.stdout + proc.stderr).decode()
+    assert (
+        f"task {tid}" in out
+        or f"Attaching to task {tid}" in out
+        or "No actions applicable" in out
+    ), f"taskopen did not run for task {tid}: stdout+stderr={out!r}"
+
+
+def test_given_taskfzf_script_when_inspected_then_has_bindings_data(taskfzf_path: Path):
+    # T-009
+    src = taskfzf_path.read_text()
+    assert "BINDINGS_DATA=" in src, "BINDINGS_DATA declaration not found in script"
+    body = _bindings_data_section(taskfzf_path)
+    assert body.strip(), "BINDINGS_DATA body is empty"
+
+
+def test_given_bindings_data_when_parsed_then_keys_match_keys_table(taskfzf_path: Path, scratch_env: dict[str, str]):
+    # T-009
+    body = _bindings_data_section(taskfzf_path)
+    data_keys = set()
+    for line in body.splitlines():
+        if not line.strip():
+            continue
+        kind, key, _, _ = line.split("|", 3)
+        assert kind in {"task-act", "undo", "list-change", "reload", "show-keys", "show-info"}, (
+            f"unknown kind {kind!r} in BINDINGS_DATA line {line!r}"
+        )
+        data_keys.add(key)
+
+    table_keys = {key for key, _ in _keys_table(scratch_env)}
+    missing = data_keys - table_keys
+    assert not missing, f"BINDINGS_DATA keys not rendered in help table: {missing}"
+
+
+@REQUIRES_TASK
+def test_given_keys_table_when_rendered_then_current_bindings_present(scratch_env: dict[str, str]):
+    # T-009
+    rows = _keys_table(scratch_env)
+    keys_present = {k for k, _ in rows}
+    for expected_key, _ in CURRENT_BINDINGS:
+        assert expected_key in keys_present, (
+            f"current binding {expected_key!r} missing from keys table: {keys_present!r}"
         )
 
 
-def test_given_taskfzf_script_when_inspected_then_enter_binding_shows_information(taskfzf_path: Path):
-    # AC-21: enter binding dispatches task information
+def test_given_keys_table_when_rendered_then_removed_bindings_absent(scratch_env: dict[str, str]):
+    # T-005 / T-007 / T-008 / T-003
+    rows = _keys_table(scratch_env)
+    keys_present = {k for k, _ in rows}
+    for removed in REMOVED_BINDINGS:
+        assert removed not in keys_present, (
+            f"removed binding {removed!r} still present in keys table: {keys_present!r}"
+        )
+
+
+def test_given_bindings_data_when_parsed_then_includes_new_keys(taskfzf_path: Path):
+    # T-001 / T-002 / T-003 / T-004 / T-006
+    body = _bindings_data_section(taskfzf_path)
+    data_keys = set()
+    for line in body.splitlines():
+        if not line.strip():
+            continue
+        _, key, _, _ = line.split("|", 3)
+        data_keys.add(key)
+    for new_key in ("ctrl-c", "e", "u", "a", "s"):
+        assert new_key in data_keys, f"new binding {new_key!r} missing from BINDINGS_DATA"
+
+
+def test_given_taskfzf_script_when_inspected_then_uses_gen_all_binds(taskfzf_path: Path):
+    # T-009
     src = taskfzf_path.read_text()
-    assert (
-        '--bind="enter:execute(env _TASKFZF_TASK_ACT=information $0 {+f} | less)"' in src
-    ), "enter bind string not found in script source"
+    assert "$(gen_all_binds)" in src, "fzf invocation must consume gen_all_binds() output"
 
 
-EXPECTED_ACTION_BINDINGS = [
-    '--bind="D:execute(env _TASKFZF_TASK_ACT=do $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
-    '--bind="X:execute(env _TASKFZF_TASK_ACT=delete $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
-    '--bind="U:execute(env _TASKFZF_TASK_ACT=undo $0< /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
-    '--bind="E:execute(env _TASKFZF_TASK_ACT=edit $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
-    '--bind="T:execute(env _TASKFZF_TASK_ACT=add $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
-    '--bind="I:execute(env _TASKFZF_TASK_ACT=add-with-context $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
-    '--bind="A:execute(env _TASKFZF_TASK_ACT=append $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
-    '--bind="N:execute(env _TASKFZF_TASK_ACT=annotate $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
-    '--bind="M:execute(env _TASKFZF_TASK_ACT=modify $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
-    '--bind="S:execute(env _TASKFZF_TASK_ACT=start $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
-    '--bind="P:execute(env _TASKFZF_TASK_ACT=stop $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
-]
-
-
-def test_given_taskfzf_script_when_inspected_then_action_bindings_reload(taskfzf_path: Path):
-    # AC-28: action bindings use +reload instead of +print-query so fzf
-    # stays alive and refreshes the task list after each action.
+def test_given_taskfzf_script_when_inspected_then_keys_table_is_function(taskfzf_path: Path):
+    # T-009
     src = taskfzf_path.read_text()
-    for expected in EXPECTED_ACTION_BINDINGS:
-        assert expected in src, f"action binding missing: {expected}"
+    assert "print_keys_table()" in src, "print_keys_table() not invoked"
+    assert "print_keys_table() {" in src, "print_keys_table() function not defined"
 
-
-# ---------------------------------------------------------------------------
-# E. Report-format requirement
-# ---------------------------------------------------------------------------
 
 def test_given_non_numeric_first_column_when_action_invoked_then_warning(scratch_env: dict[str, str]):
-    # AC-22: non-numeric first column in non-all report triggers warning
+    # AC-22
     fixture = Path(scratch_env["TASKDATA"]) / "fixture.txt"
     fixture.write_text("hello world\n")
     proc = run_taskfzf(
@@ -531,12 +525,8 @@ def test_given_non_numeric_first_column_when_action_invoked_then_warning(scratch
     )
 
 
-# ---------------------------------------------------------------------------
-# F. Static / environmental behaviors
-# ---------------------------------------------------------------------------
-
 def test_given_all_report_when_action_invoked_then_uuids_extracted(scratch_env: dict[str, str]):
-    # AC-24: 'all' report extracts 8-hex UUIDs from selected lines (no warning)
+    # AC-24
     fixture = Path(scratch_env["TASKDATA"]) / "fixture.txt"
     fixture.write_text("abc12345 some description\n")
     proc = run_taskfzf(
@@ -550,7 +540,7 @@ def test_given_all_report_when_action_invoked_then_uuids_extracted(scratch_env: 
 
 
 def test_given_multiple_tasks_selected_when_modify_invoked_then_first_only(scratch_env: dict[str, str]):
-    # AC-25: modify/append/annotate with multiple selected tasks warns, uses only first
+    # AC-25: annotate removed by T-005 so the warning case covers modify/append.
     fixture = Path(scratch_env["TASKDATA"]) / "fixture.txt"
     fixture.write_text("1\n2\n")
     proc = run_taskfzf(

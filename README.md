@@ -31,26 +31,21 @@ Besides that, `taskfzf` also accepts modifications to your config using
 `taskfzf` uses [`fzf`'s
 bindings](https://www.mankier.com/1/fzf#Key_Bindings) to perform actions
 over the highlighted task or to change the list of tasks presented.
-Since tasks are usually written in lower case letters, and in order to
-mitigate key bindings clashes with a parent program `taskfzf` may run
-inside (e.g tmux, Neovim's `:term` etc.), I decided to bind every upper
-case letter to an action.
-
 Pressing `?` prints a summary of all key bindings and their actions but
 the lists here explain a bit more.
 
 #### Perform an action over the selected tasks
 
 - `D` marks the tasks as done (`task do`).
-- `X` Deletes the tasks (`task del`).
+- `X` deletes the tasks (`task del`).
 - `E` edits the task in your editor (`task edit`).
-- `T` edits the task in your editor (`task edit`).
-- `I` Add a new task, with context of the currently highlighted task
+- `I` adds a new task, with context of the currently highlighted task.
 - `A` appends a text to the tasks using a shell input (`task append`).
-- `N` annotates a text to a task using a shell input (`task annotate`).
 - `M` modifies a task using a shell input (`task modify`).
-- `S` starts the tasks (`task start`).
-- `P` stops the tasks (`task stop`).
+- `e` opens the selected task in [taskopen](https://github.com/ValiValpas/taskopen).
+- `s` toggles the task between started and stopped: `start` if pending,
+  `stop` if already started.
+- `a` adds a new task via an inline fzf popup prompt (`task add`).
 
 > **IMPORTANT:** The script expects all reports to put in their 1st
 > column the task's number. You will get a warning when trying to perform
@@ -59,8 +54,8 @@ the lists here explain a bit more.
 
 #### Other actions
 
-- `U` undo the last action performed (`task undo`).
-- `T` add interactively a new task (`task add`).
+- `u` undo the last action performed (`task undo`).
+- `enter` show the highlighted task's information (`task info`).
 
 #### Change / Reload the current list of tasks
 
@@ -77,7 +72,8 @@ using:
 
 - `R` changes the current "report" (`task reports`).
 - `C` changes the current context (`task contexts`).
-- `CTRL-R` reloads the current report, useful when another instance
+- `ctrl-c` alias for `C` - changes the current context.
+- `ctrl-r` reloads the current report, useful when another instance
   of `task` changes your tasks.
 
 ## Running the Tests
