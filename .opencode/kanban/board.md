@@ -1,4 +1,4 @@
-## New (9)
+## New (10)
 - [Add ctrl+c binding to open a context switcher](tasks/T-001.md)
 - [e binding opens taskopen](tasks/T-002.md)
 - [u to undo latest action](tasks/T-003.md)
@@ -8,6 +8,7 @@
 - [p unbind this](tasks/T-007.md)
 - [ensure ? binding lists all updated bindings - no hardcoding - use programmatically](tasks/T-009.md)
 - [add regression test suite as a baseline in a executable file called taskfzf-test.sh](tasks/T-010.md)
+- [fzf add feature where after an action is made then return to fzf list](tasks/T-011.md)
 ## Accepted (0)
 ## Breakdown (0)
 ## Ready (0)
