@@ -38,41 +38,41 @@ class Binding(StrEnum):
     D = "D"
     X = "X"
     U_LOWER = "u"
+    U_UPPER = "U"
     E_UPPER = "E"
     A_LOWER = "a"
-    I = "I"
     A_UPPER = "A"
     E_LOWER = "e"
     M = "M"
     S_LOWER = "s"
+    S_UPPER = "S"
     R = "R"
     C = "C"
-    SHIFT_C = "shift-c"
     CTRL_R = "ctrl-r"
+    CTRL_SLASH = "ctrl-/"
     QUESTION = "?"
-    ENTER = "enter"
 
 
 CURRENT_BINDINGS = frozenset({
     (Binding.D, Action.DO),
     (Binding.X, Action.DELETE),
     (Binding.U_LOWER, Action.UNDO),
-    (Binding.E_UPPER, Action.EDIT),
+    (Binding.U_UPPER, Action.UNDO),
+    (Binding.E_UPPER, Action.TASKOPEN),
     (Binding.A_LOWER, Action.ADD_POPUP),
-    (Binding.I, Action.ADD_WITH_CONTEXT),
-    (Binding.A_UPPER, Action.APPEND),
+    (Binding.A_UPPER, Action.ADD_WITH_CONTEXT),
     (Binding.E_LOWER, Action.TASKOPEN),
     (Binding.M, Action.MODIFY),
     (Binding.S_LOWER, Action.TOGGLE),
+    (Binding.S_UPPER, Action.TOGGLE),
     (Binding.R, "report"),
     (Binding.C, "context"),
-    (Binding.SHIFT_C, "context"),
     (Binding.CTRL_R, "reload"),
     (Binding.QUESTION, "keys"),
-    (Binding.ENTER, Action.INFORMATION),
+    (Binding.CTRL_SLASH, Action.INFORMATION),
 })
 
-REMOVED_BINDINGS = frozenset({"U", "S", "P", "T", "N", "ctrl-c"})
+REMOVED_BINDINGS = frozenset({"P", "T", "N", "ctrl-c", "I", "enter", "shift-c"})
 
 
 HAS_TASK = shutil.which("task") is not None
@@ -491,7 +491,7 @@ def test_given_bindings_data_when_parsed_then_includes_new_keys(taskfzf_path: Pa
             continue
         _, key, _, _ = line.split("|", 3)
         data_keys.add(key)
-    for new_key in ("shift-c", "e", "u", "a", "s"):
+    for new_key in ("U", "S", "ctrl-/"):
         assert new_key in data_keys, f"new binding {new_key!r} missing from BINDINGS_DATA"
 
 
@@ -628,4 +628,7 @@ def test_given_fzf_invoked_then_no_unknown_action_error(scratch_env: dict[str, s
     combined = (proc.stdout + proc.stderr).decode()
     assert "unknown action" not in combined, (
         f"fzf rejected a binding; raw output:\n{combined}"
+    )
+    assert "unsupported key" not in combined, (
+        f"fzf rejected a binding key; raw output:\n{combined}"
     )

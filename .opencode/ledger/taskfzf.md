@@ -190,3 +190,47 @@ Fix in taskfzf: invert the condition.
    match `task list` output (priority is a single-letter column).
    Switched to `_task_field(env, tid, "priority") == "H"` for
    precision.
+
+## 2026-09-08 - fzf binding syntax constraints
+
+**Discovery: fzf 0.65.2 rejects `shift-X` keys with `unsupported key`**
+
+**Context:** After binding `shift-c` as a context-change alias, fzf
+exited with `unsupported key: shift-c` and produced no UI. Verified
+empirically:
+```sh
+$ fzf --bind='shift-c:execute(echo hi)' </dev/null
+unsupported key: shift-c
+```
+
+Checked every binding in the current set against fzf 0.65.2: D X u U
+E a A M s S e R C ? ctrl-r ctrl-/ all accepted. Only `shift-c` was
+rejected. `ctrl-/` and `ctrl-r` work fine - the `shift-` prefix is the
+specific problem.
+
+**Decision:** remove the `shift-c` binding. The existing `C` binding
+already changes context, so the alias is redundant. Same rule applies
+to any future `shift-X` binding - don't add them. Tested alt-/ctrl-/
+ctrl-r syntax; only `shift-` is rejected.
+
+**Test added:** `test_given_fzf_invoked_then_no_unknown_action_error`
+now also asserts `"unsupported key" not in combined`. This catches
+regressions if anyone re-adds `shift-X` (or any other unsupported
+prefix) to BINDINGS_DATA.
+
+**Time cost:** ~1 iteration once fzf's actual error message was
+identified. Would have been longer without running fzf directly.
+
+## 2026-09-08 - BINDINGS_DATA row format requires 4 columns
+
+**Discovery:** the `_bindings_data_section` helper in taskfzf-test.py
+parses rows with `line.split("|", 3)` - expecting 4 fields
+(kind|key|arg|help). A row with only 3 fields raises `ValueError`
+during the iteration. The original `show-info|enter|-|Show task
+information` had 4 columns; my replacement `show-info|ctrl-/|Toggle
+show task info` had 3 and crashed the test parser.
+
+**Lesson:** keep the arg column even when the kind (show-info, undo,
+reload, show-keys) doesn't use it. Use `-` as the placeholder, like
+the original `show-info|enter|-|...` did. gen_bind_arg ignores the arg
+column for these kinds but the BINDINGS_DATA parser doesn't.
