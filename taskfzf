@@ -102,8 +102,8 @@ gen_bind_arg() {
 }
 
 # Emit every fzf --bind= argument, one per line, derived from BINDINGS_DATA.
-# Output is consumed via $(gen_all_binds); command substitution + word
-# splitting turns each line into its own argument to fzf.
+# Each line is consumed one-at-a-time (see fzf invocation below) so the
+# spaces inside execute(...) payloads do NOT get word-split.
 gen_all_binds() {
 	printf '%s\n' "$BINDINGS_DATA" | while IFS='|' read -r kind key arg help; do
 		[ -z "$key" ] && continue
@@ -351,9 +351,20 @@ while [ $? != 130 ]; do
 	# via gen_all_binds(); see the single source of truth at the top of
 	# the file. Adding / removing / renaming a binding happens there and
 	# only there.
-	$tw $tw_args | fzf --ansi \
-		--multi \
-		$(gen_all_binds)
+	# Build fzf --bind arguments without word-splitting on the spaces inside
+	# each execute(...) payload. gen_all_binds emits one binding per line;
+	# restricting IFS to newlines (and disabling globs) maps each line to
+	# exactly one positional parameter, so every binding reaches fzf intact.
+	old_IFS=$IFS
+	IFS='
+'
+	set -f
+	# shellcheck disable=SC2086  # word splitting on newlines is intentional
+	set -- $(gen_all_binds)
+	set +f
+	IFS=$old_IFS
+
+	$tw $tw_args | fzf --ansi --multi "$@"
         # exit
         exit
 done

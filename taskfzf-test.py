@@ -553,3 +553,79 @@ def test_given_multiple_tasks_selected_when_modify_invoked_then_first_only(scrat
     assert "Only the first task" in stderr, (
         f"stderr missing Only-the-first-task warning: {stderr!r}"
     )
+
+
+def _write_fake_fzf(bin_dir: Path) -> Path:
+    script = bin_dir / "fzf"
+    script.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = \"--version\" ]; then\n"
+        "  echo '0.65.2'\n"
+        "  exit 0\n"
+        "fi\n"
+        "i=0\n"
+        "for a in \"$@\"; do\n"
+        "  i=$((i+1))\n"
+        "  printf 'ARG %d<<%s>>\\n' \"$i\" \"$a\"\n"
+        "done\n"
+        "exit 0\n"
+    )
+    script.chmod(0o755)
+    return script
+
+
+def test_given_fzf_invoked_then_bindings_passed_as_single_argv_elements(
+    scratch_env: dict[str, str],
+):
+    bin_dir = Path(scratch_env["TASKDATA"]) / "bin"
+    bin_dir.mkdir()
+    _write_fake_fzf(bin_dir)
+    env = dict(scratch_env)
+    env["PATH"] = f"{bin_dir}:{env['PATH']}"
+    proc = subprocess.run(
+        [str(Path(__file__).parent / "taskfzf")],
+        input=b"",
+        capture_output=True,
+        env=env,
+        timeout=10,
+    )
+    assert proc.returncode == 0, (
+        f"taskfzf exited {proc.returncode}, stderr={proc.stderr.decode()!r}"
+    )
+    binding_args = [
+        line[line.index("<<") + 2 : line.rindex(">>")]
+        for line in proc.stdout.decode().splitlines()
+        if line.startswith("ARG ") and "--bind=" in line
+    ]
+    assert len(binding_args) == len(CURRENT_BINDINGS), (
+        f"expected {len(CURRENT_BINDINGS)} --bind args to fzf, "
+        f"got {len(binding_args)}: {binding_args!r}"
+    )
+    for binding in binding_args:
+        assert binding.startswith("--bind="), binding
+        assert ":execute(" in binding or ":reload(" in binding, (
+            f"binding missing execute/reload action (word-split?): {binding!r}"
+        )
+    do_bind = next((b for b in binding_args if b.startswith("--bind=D:")), "")
+    assert do_bind, f"D binding not found in: {binding_args!r}"
+    assert "_TASKFZF_TASK_ACT=do" in do_bind, (
+        f"D binding fragmented; expected _TASKFZF_TASK_ACT=do in one arg, "
+        f"got: {do_bind!r}"
+    )
+    assert "+reload(" in do_bind, (
+        f"D binding missing +reload suffix: {do_bind!r}"
+    )
+
+
+def test_given_fzf_invoked_then_no_unknown_action_error(scratch_env: dict[str, str]):
+    proc = subprocess.run(
+        [str(Path(__file__).parent / "taskfzf")],
+        input=b"",
+        capture_output=True,
+        env={**scratch_env, "TERM": "xterm"},
+        timeout=10,
+    )
+    combined = (proc.stdout + proc.stderr).decode()
+    assert "unknown action" not in combined, (
+        f"fzf rejected a binding; raw output:\n{combined}"
+    )
