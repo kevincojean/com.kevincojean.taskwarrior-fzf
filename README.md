@@ -72,7 +72,7 @@ using:
 
 - `R` changes the current "report" (`task reports`).
 - `C` changes the current context (`task contexts`).
-- `ctrl-c` alias for `C` - changes the current context.
+- `shift-c` changes the current context.
 - `ctrl-r` reloads the current report, useful when another instance
   of `task` changes your tasks.
 

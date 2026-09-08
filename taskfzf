@@ -61,7 +61,7 @@ task-act|s|toggle|Toggle start/stop on first selected task
 task-act|e|taskopen|Open first selected task in taskopen
 list-change|R|report|Change report
 list-change|C|context|Change context
-list-change|ctrl-c|context|Change context (alias for C)
+list-change|shift-c|context|Change context
 reload|ctrl-r|-|Reload the current report
 show-keys|?|-|Show this help
 show-info|enter|-|Show task information

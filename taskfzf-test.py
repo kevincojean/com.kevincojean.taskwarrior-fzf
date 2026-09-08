@@ -47,7 +47,7 @@ class Binding(StrEnum):
     S_LOWER = "s"
     R = "R"
     C = "C"
-    CTRL_C = "ctrl-c"
+    SHIFT_C = "shift-c"
     CTRL_R = "ctrl-r"
     QUESTION = "?"
     ENTER = "enter"
@@ -66,13 +66,13 @@ CURRENT_BINDINGS = frozenset({
     (Binding.S_LOWER, Action.TOGGLE),
     (Binding.R, "report"),
     (Binding.C, "context"),
-    (Binding.CTRL_C, "context"),
+    (Binding.SHIFT_C, "context"),
     (Binding.CTRL_R, "reload"),
     (Binding.QUESTION, "keys"),
     (Binding.ENTER, Action.INFORMATION),
 })
 
-REMOVED_BINDINGS = frozenset({"U", "S", "P", "T", "N"})
+REMOVED_BINDINGS = frozenset({"U", "S", "P", "T", "N", "ctrl-c"})
 
 
 HAS_TASK = shutil.which("task") is not None
@@ -491,7 +491,7 @@ def test_given_bindings_data_when_parsed_then_includes_new_keys(taskfzf_path: Pa
             continue
         _, key, _, _ = line.split("|", 3)
         data_keys.add(key)
-    for new_key in ("ctrl-c", "e", "u", "a", "s"):
+    for new_key in ("shift-c", "e", "u", "a", "s"):
         assert new_key in data_keys, f"new binding {new_key!r} missing from BINDINGS_DATA"
 
 
