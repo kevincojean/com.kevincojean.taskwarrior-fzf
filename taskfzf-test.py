@@ -487,6 +487,29 @@ def test_given_taskfzf_script_when_inspected_then_enter_binding_shows_informatio
     ), "enter bind string not found in script source"
 
 
+EXPECTED_ACTION_BINDINGS = [
+    '--bind="D:execute(env _TASKFZF_TASK_ACT=do $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
+    '--bind="X:execute(env _TASKFZF_TASK_ACT=delete $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
+    '--bind="U:execute(env _TASKFZF_TASK_ACT=undo $0< /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
+    '--bind="E:execute(env _TASKFZF_TASK_ACT=edit $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
+    '--bind="T:execute(env _TASKFZF_TASK_ACT=add $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
+    '--bind="I:execute(env _TASKFZF_TASK_ACT=add-with-context $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
+    '--bind="A:execute(env _TASKFZF_TASK_ACT=append $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
+    '--bind="N:execute(env _TASKFZF_TASK_ACT=annotate $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
+    '--bind="M:execute(env _TASKFZF_TASK_ACT=modify $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
+    '--bind="S:execute(env _TASKFZF_TASK_ACT=start $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
+    '--bind="P:execute(env _TASKFZF_TASK_ACT=stop $0 {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true $0)"',
+]
+
+
+def test_given_taskfzf_script_when_inspected_then_action_bindings_reload(taskfzf_path: Path):
+    # AC-28: action bindings use +reload instead of +print-query so fzf
+    # stays alive and refreshes the task list after each action.
+    src = taskfzf_path.read_text()
+    for expected in EXPECTED_ACTION_BINDINGS:
+        assert expected in src, f"action binding missing: {expected}"
+
+
 # ---------------------------------------------------------------------------
 # E. Report-format requirement
 # ---------------------------------------------------------------------------
