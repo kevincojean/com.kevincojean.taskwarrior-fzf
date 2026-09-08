@@ -632,3 +632,87 @@ def test_given_fzf_invoked_then_no_unknown_action_error(scratch_env: dict[str, s
     assert "unsupported key" not in combined, (
         f"fzf rejected a binding key; raw output:\n{combined}"
     )
+
+
+def _write_fzf_capture_stdin(bin_dir: Path, capture_path: Path, return_name: str) -> Path:
+    script = bin_dir / "fzf"
+    script.write_text(
+        "#!/bin/sh\n"
+        "if [ \"$1\" = \"--version\" ]; then\n"
+        "  echo '0.65.2'\n"
+        "  exit 0\n"
+        "fi\n"
+        f"cat > '{capture_path}'\n"
+        f"printf '%s\\n' '{return_name}'\n"
+    )
+    script.chmod(0o755)
+    return script
+
+
+@REQUIRES_TASK
+def test_given_context_change_when_invoked_then_fzf_receives_only_context_names(
+    scratch_env: dict[str, str],
+):
+    taskrc_path = Path(scratch_env["TASKRC"])
+    with taskrc_path.open("a") as fh:
+        fh.write("context.alpha=+alpha\n")
+        fh.write("context.bravo=+bravo\n")
+        fh.write("context.charlie=+charlie\n")
+
+    bin_dir = Path(scratch_env["TASKDATA"]) / "bin"
+    bin_dir.mkdir()
+    capture_path = bin_dir / "captured_stdin.txt"
+    _write_fzf_capture_stdin(bin_dir, capture_path, "bravo")
+
+    env = dict(scratch_env)
+    env["PATH"] = f"{bin_dir}:{env['PATH']}"
+    proc = subprocess.run(
+        [str(Path(__file__).parent / "taskfzf")],
+        input=b"",
+        capture_output=True,
+        env={EnvVar.LIST_CHANGE: "context", **env},
+        timeout=10,
+    )
+    assert proc.returncode == 0, (
+        f"taskfzf exited {proc.returncode}, stderr={proc.stderr.decode()!r}"
+    )
+    assert capture_path.exists(), "fzf was never invoked (no stdin captured)"
+    lines = [l for l in capture_path.read_text().splitlines() if l.strip()]
+
+    assert set(lines) == {"alpha", "bravo", "charlie"}, (
+        f"fzf input should be exactly the context names; got {set(lines)!r} "
+        f"from lines={lines!r}"
+    )
+
+
+@REQUIRES_TASK
+def test_given_context_change_when_invoked_then_filter_file_updated(
+    scratch_env: dict[str, str],
+):
+    taskrc_path = Path(scratch_env["TASKRC"])
+    with taskrc_path.open("a") as fh:
+        fh.write("context.alpha=+alpha\n")
+        fh.write("context.bravo=+bravo\n")
+
+    bin_dir = Path(scratch_env["TASKDATA"]) / "bin"
+    bin_dir.mkdir()
+    capture_path = bin_dir / "captured_stdin.txt"
+    _write_fzf_capture_stdin(bin_dir, capture_path, "bravo")
+
+    env = dict(scratch_env)
+    env["PATH"] = f"{bin_dir}:{env['PATH']}"
+    proc = subprocess.run(
+        [str(Path(__file__).parent / "taskfzf")],
+        input=b"",
+        capture_output=True,
+        env={EnvVar.LIST_CHANGE: "context", **env},
+        timeout=10,
+    )
+    assert proc.returncode == 0, (
+        f"taskfzf exited {proc.returncode}, stderr={proc.stderr.decode()!r}"
+    )
+    marker = Path(env["XDG_RUNTIME_DIR"]) / "taskfzf-current-filter"
+    content = marker.read_text().strip()
+    assert "rc.context=bravo" in content, (
+        f"marker file missing rc.context=bravo; got {content!r}"
+    )

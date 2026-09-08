@@ -266,7 +266,7 @@ if [ -n "$_TASKFZF_LIST_CHANGE" ]; then
 			)"
 			;;
 		context)
-			context_str='rc.context='"$($tw context | fzf --ansi --no-multi \
+			context_str='rc.context='"$($tw context | awk '$2 == "read" {print $1}' | fzf --ansi --no-multi \
 				--bind='enter:execute@echo {1}@+abort' \
 			)"
 			;;
