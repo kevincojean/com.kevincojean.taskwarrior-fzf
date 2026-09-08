@@ -34,23 +34,23 @@ EOF
 basename="$(basename $0)"
 
 if [ "${_TASKFZF_SHOW}" = "keys" ]; then
-	echo KEY $'\t'Action
-	echo === $'\t'======
-	echo D$'\t\t'"Mark tasks as Done"
-	echo X$'\t\t'"Delete tasks"
-	echo U$'\t\t'"Undo last action"
-	echo E$'\t\t'"Edit selected tasks with \$EDITOR"
-	echo T$'\t\t'"Add a new task"
-	echo I$'\t\t'"Add a new task, with context of the currently highlighted task"
-	echo A$'\t\t'"Append to first selected task"
-	echo N$'\t\t'"Annotate the first selected task"
-	echo M$'\t\t'"Modify the first selected task"
-	echo R$'\t\t'"Change report"
-	echo C$'\t\t'"Change context"
-	echo CTRL-R$'\t'"Reload the current report"
-	echo S$'\t\t'"Start task"
-	echo P$'\t\t'"Stop task"
-	echo ?$'\t\t'"Show keys"
+	printf 'KEY\tAction\n'
+	printf '===\t======\n'
+	printf 'D\t\tMark tasks as Done\n'
+	printf 'X\t\tDelete tasks\n'
+	printf 'U\t\tUndo last action\n'
+	printf 'E\t\tEdit selected tasks with $EDITOR\n'
+	printf 'T\t\tAdd a new task\n'
+	printf 'I\t\tAdd a new task, with context of the currently highlighted task\n'
+	printf 'A\t\tAppend to first selected task\n'
+	printf 'N\t\tAnnotate the first selected task\n'
+	printf 'M\t\tModify the first selected task\n'
+	printf 'R\t\tChange report\n'
+	printf 'C\t\tChange context\n'
+	printf 'ctrl-r\tReload the current report\n'
+	printf 'S\t\tStart task\n'
+	printf 'P\t\tStop task\n'
+	printf '?\t\tShow keys\n'
 	exit 0
 fi
 
@@ -84,24 +84,26 @@ if [ -n "$_TASKFZF_TASK_ACT" ]; then
 		tasks_args=$(awk '{printf $1" "} END {printf "\n"}' $@)
 	fi
 	case "$tasks_args" in
-		^[a-f0-9])
-			echo "${basename}: chosen tasks: $tasks_args"
-			echo "${basename}: Unless your report is 'all', you should use reports with numbers at their first columns."
-			echo "${basename}: Please update your taskrc so all of your reports will print the task's ID/UUID at the left most column."
-			echo "${basename}: Or, alternatively, choose a line that has a number in it's beginning."
-			echo ---------------------------------------------------------------------------
-                        echo Press any key to continue
-                        read
-			exit $?
+		*[!0-9\ ]*)
+			if [ "$_TASKFZF_REPORT" != "all" ]; then
+				echo "${basename}: chosen tasks: $tasks_args" >&2
+				echo "${basename}: Unless your report is 'all', you should use reports with numbers at their first columns." >&2
+				echo "${basename}: Please update your taskrc so all of your reports will print the task's ID/UUID at the left most column." >&2
+				echo "${basename}: Or, alternatively, choose a line that has a number in it's beginning." >&2
+				echo ---------------------------------------------------------------------------
+				echo Press any key to continue
+				read
+				exit 1
+			fi
 			;;
 	esac
 	# Other actions (such as edit / append etc) can't be used upon multiple tasks
 	case "$_TASKFZF_TASK_ACT" in
 		modify|append|annotate)
-			if [ "$tasks_args" = "${tasks_args%% *}" ]; then
+			if [ "$tasks_args" != "${tasks_args%% *}" ]; then
 				tasks_args="${tasks_args%% *}"
 				clear
-				echo "${basename}: WARNING: Only the first task ($tasks_args) will be used when $_TASKFZF_TASK_ACT -ing it."
+				echo "${basename}: WARNING: Only the first task ($tasks_args) will be used when $_TASKFZF_TASK_ACT -ing it." >&2
 				echo ---------------------------------------------------------------------------
                                 echo Press any key to continue
                                 read
