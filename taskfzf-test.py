@@ -1,7 +1,13 @@
+import fcntl
 import os
+import pty
 import re
+import select
 import shutil
+import struct
 import subprocess
+import termios
+import time
 from enum import StrEnum
 from pathlib import Path
 
@@ -77,10 +83,12 @@ REMOVED_BINDINGS = frozenset({"P", "T", "N", "ctrl-c", "I", "enter", "shift-c"})
 
 HAS_TASK = shutil.which("task") is not None
 HAS_TASKOPEN = shutil.which("taskopen") is not None
+HAS_FZF = shutil.which("fzf") is not None
 REQUIRES_TASK = pytest.mark.skipif(not HAS_TASK, reason="task binary not installed")
 REQUIRES_TASKOPEN = pytest.mark.skipif(
     not HAS_TASKOPEN, reason="taskopen binary not installed"
 )
+REQUIRES_FZF = pytest.mark.skipif(not HAS_FZF, reason="fzf binary not installed")
 
 
 @pytest.fixture
@@ -715,4 +723,183 @@ def test_given_context_change_when_invoked_then_filter_file_updated(
     content = marker.read_text().strip()
     assert "rc.context=bravo" in content, (
         f"marker file missing rc.context=bravo; got {content!r}"
+    )
+
+
+@REQUIRES_TASK
+def test_given_context_change_twice_when_invoked_then_marker_reflects_second(
+    scratch_env: dict[str, str],
+):
+    taskrc_path = Path(scratch_env["TASKRC"])
+    with taskrc_path.open("a") as fh:
+        fh.write("context.alpha=+alpha\n")
+        fh.write("context.bravo=+bravo\n")
+        fh.write("context.charlie=+charlie\n")
+
+    bin_dir = Path(scratch_env["TASKDATA"]) / "bin"
+    bin_dir.mkdir()
+    capture1 = bin_dir / "captured1.txt"
+    _write_fzf_capture_stdin(bin_dir, capture1, "bravo")
+
+    env = dict(scratch_env)
+    env["PATH"] = f"{bin_dir}:{env['PATH']}"
+    marker = Path(env["XDG_RUNTIME_DIR"]) / "taskfzf-current-filter"
+
+    proc1 = subprocess.run(
+        [str(Path(__file__).parent / "taskfzf")],
+        input=b"",
+        capture_output=True,
+        env={EnvVar.LIST_CHANGE: "context", **env},
+        timeout=10,
+    )
+    assert proc1.returncode == 0, (
+        f"first taskfzf exited {proc1.returncode}, stderr={proc1.stderr.decode()!r}"
+    )
+    assert "rc.context=bravo" in marker.read_text(), (
+        f"first change missing rc.context=bravo; got {marker.read_text()!r}"
+    )
+
+    capture2 = bin_dir / "captured2.txt"
+    _write_fzf_capture_stdin(bin_dir, capture2, "charlie")
+
+    proc2 = subprocess.run(
+        [str(Path(__file__).parent / "taskfzf")],
+        input=b"",
+        capture_output=True,
+        env={EnvVar.LIST_CHANGE: "context", **env},
+        timeout=10,
+    )
+    assert proc2.returncode == 0, (
+        f"second taskfzf exited {proc2.returncode}, stderr={proc2.stderr.decode()!r}"
+    )
+    assert "rc.context=charlie" in marker.read_text(), (
+        f"second change did not update marker; got {marker.read_text()!r}"
+    )
+    assert "rc.context=bravo" not in marker.read_text(), (
+        f"marker still has the first context after the second change; "
+        f"got {marker.read_text()!r}"
+    )
+
+
+def _run_taskfzf_in_pty(
+    base_env: dict[str, str],
+    *,
+    env_overrides: dict[str, str],
+    keys: list[str],
+    settle: float = 1.0,
+    timeout: float = 20.0,
+) -> str:
+    """Run taskfzf on a real pty so the real fzf TUI runs and reacts to keys.
+
+    The fake-fzf helpers above cannot cover the picker: they ignore --bind
+    completely, so they say nothing about whether fzf's selection actually
+    reaches the surrounding command substitution.
+    """
+    env = dict(base_env)
+    env.update(env_overrides)
+    env["TERM"] = "xterm"
+    master, slave = pty.openpty()
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
+    proc = subprocess.Popen(
+        [str(Path(__file__).parent / "taskfzf")],
+        stdin=slave,
+        stdout=slave,
+        stderr=slave,
+        env=env,
+        close_fds=True,
+        start_new_session=True,
+    )
+    os.close(slave)
+    output = b""
+    try:
+        # fzf's accept takes whatever is highlighted at that instant, so the
+        # query must be given time to filter before Enter is sent.
+        for chunk_keys in keys:
+            time.sleep(settle)
+            os.write(master, chunk_keys.encode())
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            ready, _, _ = select.select([master], [], [], 0.2)
+            if ready:
+                try:
+                    chunk = os.read(master, 65536)
+                except OSError:
+                    break
+                if not chunk:
+                    break
+                output += chunk
+            elif proc.poll() is not None:
+                break
+        proc.wait(timeout=5)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=5)
+        os.close(master)
+    return output.decode(errors="replace")
+
+
+@REQUIRES_TASK
+@REQUIRES_FZF
+def test_given_context_picked_in_real_fzf_then_marker_records_that_context(
+    scratch_env: dict[str, str],
+):
+    taskrc_path = Path(scratch_env["TASKRC"])
+    with taskrc_path.open("a") as fh:
+        fh.write("context.alpha=+alpha\n")
+        fh.write("context.bravo=+bravo\n")
+        fh.write("context.charlie=+charlie\n")
+
+    screen = _run_taskfzf_in_pty(
+        scratch_env,
+        env_overrides={EnvVar.LIST_CHANGE: "context"},
+        keys=["bravo", "\r"],
+    )
+    marker = Path(scratch_env["XDG_RUNTIME_DIR"]) / "taskfzf-current-filter"
+    assert marker.read_text().strip() == "rc.context=bravo", (
+        f"picking 'bravo' in the real fzf must write rc.context=bravo; "
+        f"marker={marker.read_text()!r} screen tail={screen[-300:]!r}"
+    )
+
+
+@REQUIRES_TASK
+@REQUIRES_FZF
+def test_given_report_picked_in_real_fzf_then_marker_records_report_name_only(
+    scratch_env: dict[str, str],
+):
+    # The reports listing is two columns (name + description), so only the
+    # first field may reach the marker file.
+    screen = _run_taskfzf_in_pty(
+        scratch_env,
+        env_overrides={EnvVar.LIST_CHANGE: "report"},
+        keys=["overdue", "\r"],
+    )
+    marker = Path(scratch_env["XDG_RUNTIME_DIR"]) / "taskfzf-current-filter"
+    assert marker.read_text().strip() == "overdue", (
+        f"picking the overdue report must write just the report name; "
+        f"marker={marker.read_text()!r} screen tail={screen[-300:]!r}"
+    )
+
+
+@REQUIRES_TASK
+@REQUIRES_FZF
+def test_given_context_picker_cancelled_in_real_fzf_then_filter_unchanged(
+    scratch_env: dict[str, str],
+):
+    taskrc_path = Path(scratch_env["TASKRC"])
+    with taskrc_path.open("a") as fh:
+        fh.write("context.alpha=+alpha\n")
+        fh.write("context.bravo=+bravo\n")
+
+    marker = Path(scratch_env["XDG_RUNTIME_DIR"]) / "taskfzf-current-filter"
+    marker.write_text("rc.context=alpha\n")
+
+    screen = _run_taskfzf_in_pty(
+        scratch_env,
+        env_overrides={EnvVar.LIST_CHANGE: "context"},
+        keys=["\x1b"],
+    )
+    assert marker.read_text().strip() == "rc.context=alpha", (
+        f"cancelling the picker must leave the current filter alone; "
+        f"marker={marker.read_text()!r} screen tail={screen[-300:]!r}"
     )

@@ -259,18 +259,30 @@ fi
 if [ -n "$_TASKFZF_LIST_CHANGE" ]; then
 	# We'll generate a tiny bit different string to save in our marker file in
 	# the case we are changing the report or the context
+	# Do NOT reintroduce an 'enter:execute@echo {1}@+abort' binding here.
+	# fzf's execute action hands its child the terminal, so the echoed
+	# selection goes to the tty and never reaches the command substitution
+	# below - it always captured the empty string. fzf's default enter
+	# (accept) writes the selection to fzf's own stdout, which is what a
+	# '$(...)' capture actually reads.
 	case $_TASKFZF_LIST_CHANGE in
 		report)
-			report_str="$($tw reports | sed '$d' | fzf --ansi --no-multi \
-				--bind='enter:execute@echo {1}@+abort' \
-			)"
+			# The reports listing is 'name  description'; only the name is
+			# usable as a task argument.
+			picked="$($tw reports | sed '$d' | fzf --ansi --no-multi | awk '{print $1}')"
+			report_str="$picked"
 			;;
 		context)
-			context_str='rc.context='"$($tw context | awk '$2 == "read" {print $1}' | fzf --ansi --no-multi \
-				--bind='enter:execute@echo {1}@+abort' \
-			)"
+			picked="$($tw context | awk '$2 == "read" {print $1}' | fzf --ansi --no-multi)"
+			context_str="rc.context=$picked"
 			;;
 	esac
+
+	# An empty pick means the user cancelled (Esc / Ctrl-c). Writing the
+	# marker anyway would silently clear their current context or report.
+	if [ -z "$picked" ]; then
+		exit
+	fi
 
 	# We save the next command line arguments for the next, outer loop
 	echo "$context_str" "$report_str" > $current_filter

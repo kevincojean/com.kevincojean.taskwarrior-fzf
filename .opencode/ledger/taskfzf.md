@@ -221,6 +221,74 @@ prefix) to BINDINGS_DATA.
 **Time cost:** ~1 iteration once fzf's actual error message was
 identified. Would have been longer without running fzf directly.
 
+## 2026-09-08 - context/report picker never captured the selection
+
+### Discovery: fzf `execute` writes to the tty, not to fzf's stdout
+
+**Context:** user reported "changing context works once, then never
+again". Both pickers used:
+```sh
+context_str='rc.context='"$(... | fzf --ansi --no-multi \
+    --bind='enter:execute@echo {1}@+abort')"
+```
+
+**Root cause:** fzf's `execute` action hands the child process the
+terminal. `echo {1}` therefore prints to the tty, where the surrounding
+`$(...)` cannot see it. The capture was ALWAYS the empty string. This
+is not a race between `execute` and `+abort` - the value never had a
+path to stdout in the first place.
+
+**Empirical proof** (fzf 0.65.2, driven under a pty):
+```
+execute@echo {1}@+abort  -> captured ''      (tty shows "alpha")
+become@echo {1}@         -> captured 'alpha'
+default enter (accept)   -> captured 'alpha'
+```
+
+**Why it looked like "works once":** the empty capture wrote
+`rc.context=` to the marker file, which *clears* the context. The first
+press visibly changed the list (context -> none), so it read as
+success. Every later press re-cleared an already-empty context and did
+nothing. Verified end-to-end on the pre-fix script: press `C` twice,
+marker is `rc.context=` both times.
+
+**Fix chosen:** drop the custom binding entirely and use fzf's default
+`accept`, which writes the selection to fzf's own stdout. The reports
+listing is two columns, so the name is extracted with a following
+`awk '{print $1}'`. Contexts are already single-column via the existing
+`awk '$2 == "read" {print $1}'`.
+
+**Rejected alternative:** `become@echo {1}@` also works and keeps `{1}`
+inside fzf, but `become` needs fzf >= 0.38.0 while the script's version
+gate advertises >= 0.19.0. Taking it would have forced an unrelated
+compatibility bump. The `accept` route needs no version change.
+
+**Checked, not a concern:** fzf `--ansi` strips ANSI codes from the
+value it writes to stdout, so `awk '{print $1}'` is safe even if
+taskwarrior starts colorizing `task reports` (it does not today,
+despite `rc._forcecolor=on`).
+
+### Discovery: cancelling the picker silently wiped the current filter
+
+Same block, second defect. Esc / Ctrl-c gives an empty selection, which
+was written to the marker as `rc.context=` (or an empty report),
+destroying the user's current filter. Guarded with an early `exit` on
+an empty pick, leaving the marker untouched.
+
+### Testing: fake fzf cannot cover this path
+
+`_write_fzf_capture_stdin` and friends ignore `--bind` completely, so
+every fake-fzf test passed against the broken script - including the
+"change context twice" test. Covering this required driving the REAL
+fzf under a pty (`_run_taskfzf_in_pty`).
+
+**Pty harness gotcha:** fzf's `accept` takes whatever is highlighted at
+that instant. Writing `"bravo\r"` in one `os.write` made fzf accept
+`alpha` (the still-highlighted first row) because Enter arrived before
+filtering finished. The helper now takes a list of key chunks and
+sleeps between them. Do not collapse that loop back into a single
+write - the test still passes sometimes, on the wrong item.
+
 ## 2026-09-08 - BINDINGS_DATA row format requires 4 columns
 
 **Discovery:** the `_bindings_data_section` helper in taskfzf-test.py
