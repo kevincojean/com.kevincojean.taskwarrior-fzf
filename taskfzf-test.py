@@ -41,36 +41,32 @@ class Action(StrEnum):
 
 
 class Binding(StrEnum):
-    D = "D"
-    X = "X"
-    U_LOWER = "u"
+    D_UPPER = "D"
+    X_UPPER = "X"
     U_UPPER = "U"
     E_UPPER = "E"
-    A_LOWER = "a"
     A_UPPER = "A"
-    E_LOWER = "e"
-    O = "O"
-    M = "M"
-    S_LOWER = "s"
+    O_UPPER = "O"
+    M_UPPER = "M"
     S_UPPER = "S"
-    R = "R"
-    C = "C"
+    R_UPPER = "R"
+    C_UPPER = "C"
     CTRL_R = "ctrl-r"
     CTRL_SLASH = "ctrl-/"
     QUESTION = "?"
 
 
 CURRENT_BINDINGS = frozenset({
-    (Binding.D, Action.DO),
-    (Binding.X, Action.DELETE),
+    (Binding.D_UPPER, Action.DO),
+    (Binding.X_UPPER, Action.DELETE),
     (Binding.U_UPPER, Action.UNDO),
     (Binding.E_UPPER, Action.EDIT),
-    (Binding.O, Action.TASKOPEN),
+    (Binding.O_UPPER, Action.TASKOPEN),
     (Binding.A_UPPER, Action.ADD_WITH_CONTEXT),
-    (Binding.M, Action.MODIFY),
+    (Binding.M_UPPER, Action.MODIFY),
     (Binding.S_UPPER, Action.TOGGLE),
-    (Binding.R, "report"),
-    (Binding.C, "context"),
+    (Binding.R_UPPER, "report"),
+    (Binding.C_UPPER, "context"),
     (Binding.CTRL_R, "reload"),
     (Binding.QUESTION, "keys"),
     (Binding.CTRL_SLASH, Action.INFORMATION),
