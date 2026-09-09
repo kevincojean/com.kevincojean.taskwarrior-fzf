@@ -42,10 +42,6 @@ the lists here explain a bit more.
 - `I` adds a new task, with context of the currently highlighted task.
 - `A` appends a text to the tasks using a shell input (`task append`).
 - `M` modifies a task using a shell input (`task modify`).
-- `e` opens the selected task in [taskopen](https://github.com/ValiValpas/taskopen).
-- `s` toggles the task between started and stopped: `start` if pending,
-  `stop` if already started.
-- `a` adds a new task via an inline fzf popup prompt (`task add`).
 
 > **IMPORTANT:** The script expects all reports to put in their 1st
 > column the task's number. You will get a warning when trying to perform
@@ -54,7 +50,9 @@ the lists here explain a bit more.
 
 #### Other actions
 
-- `u` undo the last action performed (`task undo`).
+- `U` undo the last action performed (`task undo`).
+- `S` toggles the task between started and stopped: `start` if pending,
+  `stop` if already started.
 - `enter` show the highlighted task's information (`task info`).
 
 #### Change / Reload the current list of tasks

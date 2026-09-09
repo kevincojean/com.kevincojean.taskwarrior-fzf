@@ -11,16 +11,16 @@ tw='task rc.defaultwidth=0 rc.defaultheight=0 rc.verbose=nothing rc._forcecolor=
 maximum_unsupported_fzf_version=0.18.0
 fzf_version="$(fzf --version)"
 if printf "${maximum_unsupported_fzf_version}\n%s" $fzf_version | sort -V | tail -1 | grep -q ${maximum_unsupported_fzf_version}; then
-	echo taskfzf: Your fzf version "($fzf_version)" is not supported >&2
-	echo taskfzf: Please install 0.19.0 or higher from https://github.com/junegunn/fzf/releases >&2
-	exit 1
+  echo taskfzf: Your fzf version "($fzf_version)" is not supported >&2
+  echo taskfzf: Please install 0.19.0 or higher from https://github.com/junegunn/fzf/releases >&2
+  exit 1
 fi
 
 # Make all less invocations interpret ANSI colors
 export LESS="-r"
 
-print_taskwarrior_bug_info(){
-	cat >&2 <<EOF
+print_taskwarrior_bug_info() {
+  cat >&2 <<EOF
 Due to a bug in taskwarrior, taskwarrior-fzf was not able to get the filter of the
 Current context correctly. See https://github.com/GothenburgBitFactory/taskwarrior/issues/2219
 
@@ -51,15 +51,11 @@ basename="$(basename $0)"
 BINDINGS_DATA='
 task-act|D|do|Mark tasks as Done
 task-act|X|delete|Delete tasks
-undo|u|-|Undo last action
 undo|U|-|Undo last action
 task-act|E|taskopen|Open first selected task in taskopen
-task-act|a|add-popup|Add a new task in a popup prompt
 task-act|A|add-with-context|Add a new task, with context of the currently highlighted task
 task-act|M|modify|Modify the first selected task
-task-act|s|toggle|Toggle start/stop on first selected task
 task-act|S|toggle|Toggle start/stop on first selected task
-task-act|e|taskopen|Open first selected task in taskopen
 list-change|R|report|Change report
 list-change|C|context|Change context
 reload|ctrl-r|-|Reload the current report
@@ -70,76 +66,76 @@ show-info|ctrl-/|-|Toggle show task info
 # Emit one fzf --bind= argument for a single binding row.
 # Args: kind key arg
 gen_bind_arg() {
-	kind="$1"
-	key="$2"
-	arg="$3"
-	case "$kind" in
-		task-act)
-			printf -- '--bind=%s:execute(env _TASKFZF_TASK_ACT=%s %s {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true %s)' \
-				"$key" "$arg" "$0" "$0"
-			;;
-		undo)
-			printf -- '--bind=%s:execute(env _TASKFZF_TASK_ACT=undo %s < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true %s)' \
-				"$key" "$0" "$0"
-			;;
-		list-change)
-			printf -- '--bind=%s:execute(env _TASKFZF_LIST_CHANGE=%s %s)+reload(env _TASKFZF_RELOAD=true %s)' \
-				"$key" "$arg" "$0" "$0"
-			;;
-		reload)
-			printf -- '--bind=%s:reload(env _TASKFZF_INTERNAL=reload %s)' \
-				"$key" "$0"
-			;;
-		show-keys)
-			printf -- '--bind=%s:execute(env _TASKFZF_SHOW=keys %s | less)+print-query' \
-				"$key" "$0"
-			;;
-		show-info)
-			printf -- '--bind=%s:execute(env _TASKFZF_TASK_ACT=information %s {+f} | less)' \
-				"$key" "$0"
-			;;
-	esac
+  kind="$1"
+  key="$2"
+  arg="$3"
+  case "$kind" in
+  task-act)
+    printf -- '--bind=%s:execute(env _TASKFZF_TASK_ACT=%s %s {+f} < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true %s)' \
+      "$key" "$arg" "$0" "$0"
+    ;;
+  undo)
+    printf -- '--bind=%s:execute(env _TASKFZF_TASK_ACT=undo %s < /dev/tty > /dev/tty 2>&1 )+reload(env _TASKFZF_RELOAD=true %s)' \
+      "$key" "$0" "$0"
+    ;;
+  list-change)
+    printf -- '--bind=%s:execute(env _TASKFZF_LIST_CHANGE=%s %s)+reload(env _TASKFZF_RELOAD=true %s)' \
+      "$key" "$arg" "$0" "$0"
+    ;;
+  reload)
+    printf -- '--bind=%s:reload(env _TASKFZF_INTERNAL=reload %s)' \
+      "$key" "$0"
+    ;;
+  show-keys)
+    printf -- '--bind=%s:execute(env _TASKFZF_SHOW=keys %s | less)+print-query' \
+      "$key" "$0"
+    ;;
+  show-info)
+    printf -- '--bind=%s:execute(env _TASKFZF_TASK_ACT=information %s {+f} | less)' \
+      "$key" "$0"
+    ;;
+  esac
 }
 
 # Emit every fzf --bind= argument, one per line, derived from BINDINGS_DATA.
 # Each line is consumed one-at-a-time (see fzf invocation below) so the
 # spaces inside execute(...) payloads do NOT get word-split.
 gen_all_binds() {
-	printf '%s\n' "$BINDINGS_DATA" | while IFS='|' read -r kind key arg help; do
-		[ -z "$key" ] && continue
-		gen_bind_arg "$kind" "$key" "$arg"
-		printf '\n'
-	done
+  printf '%s\n' "$BINDINGS_DATA" | while IFS='|' read -r kind key arg help; do
+    [ -z "$key" ] && continue
+    gen_bind_arg "$kind" "$key" "$arg"
+    printf '\n'
+  done
 }
 
 # Print the keys help table, derived from BINDINGS_DATA. Drives the
 # `?` binding display.
 print_keys_table() {
-	printf '%s\t%s\n' KEY Action
-	printf '%s\t%s\n' === ======
-	printf '%s\n' "$BINDINGS_DATA" | while IFS='|' read -r kind key arg help; do
-		[ -z "$key" ] && continue
-		printf '%s\t%s\n' "$key" "$help"
-	done
+  printf '%s\t%s\n' KEY Action
+  printf '%s\t%s\n' === ======
+  printf '%s\n' "$BINDINGS_DATA" | while IFS='|' read -r kind key arg help; do
+    [ -z "$key" ] && continue
+    printf '%s\t%s\n' "$key" "$help"
+  done
 }
 
 # Backwards-compatible alias for the env-var gate above.
 if [ "${_TASKFZF_SHOW}" = "keys" ]; then
-	print_keys_table
-	exit 0
+  print_keys_table
+  exit 0
 fi
 
 # set a file path that it's content will mark how to execute the next command
 # in the main loop
 current_filter=${XDG_RUNTIME_DIR:-${XDG_CACHE_DIR:-${TMP-/tmp}}}/taskfzf-current-filter
 if ! touch $current_filter; then
-	echo "${basename}: Can't create a marker file needed for internal state management." >&2
-	echo "${basename}: It's default location according to your environment is $current_filter" >&2
-	echo "${basename}: Please update either of the following environment variables so the file will be creatable." >&2
-	echo "${basename}: TMP" >&2
-	echo "${basename}: XDG_RUNTIME_DIR" >&2
-	echo "${basename}: XDG_CACHE_DIR" >&2
-	exit 3
+  echo "${basename}: Can't create a marker file needed for internal state management." >&2
+  echo "${basename}: It's default location according to your environment is $current_filter" >&2
+  echo "${basename}: Please update either of the following environment variables so the file will be creatable." >&2
+  echo "${basename}: TMP" >&2
+  echo "${basename}: XDG_RUNTIME_DIR" >&2
+  echo "${basename}: XDG_CACHE_DIR" >&2
+  exit 3
 fi
 
 # --------------------------------------------------------------------------
@@ -149,158 +145,159 @@ fi
 
 # we'd want to quit after the action upon the tasks was made and only if we are not changing the list we are viewing
 if [ -n "$_TASKFZF_TASK_ACT" ]; then
-	# We clear the screen from previous output so it'll be easy to see what
-	# taskwarrior printed when doing the actions below.
-	clear
-	# checks if the arguments given to the task are numbers only
-	if [ "$_TASKFZF_REPORT" = "all" ]; then
-		tasks_args=$(grep -o '[0-9a-f]\{8\}' $@ | tr '\n' ' ')
-	else
-		tasks_args=$(awk '{printf $1" "} END {printf "\n"}' $@)
-	fi
-	case "$tasks_args" in
-		*[!0-9\ ]*)
-			if [ "$_TASKFZF_REPORT" != "all" ]; then
-				echo "${basename}: chosen tasks: $tasks_args" >&2
-				echo "${basename}: Unless your report is 'all', you should use reports with numbers at their first columns." >&2
-				echo "${basename}: Please update your taskrc so all of your reports will print the task's ID/UUID at the left most column." >&2
-				echo "${basename}: Or, alternatively, choose a line that has a number in it's beginning." >&2
-				echo ---------------------------------------------------------------------------
-				echo Press any key to continue
-				read
-				exit 1
-			fi
-			;;
-	esac
-	# Other actions (such as edit / append etc) can't be used upon multiple tasks
-	case "$_TASKFZF_TASK_ACT" in
-		modify|append)
-			if [ "$tasks_args" != "${tasks_args%% *}" ]; then
-				tasks_args="${tasks_args%% *}"
-				clear
-				echo "${basename}: WARNING: Only the first task ($tasks_args) will be used when $_TASKFZF_TASK_ACT -ing it." >&2
-				echo ---------------------------------------------------------------------------
-                                echo Press any key to continue
-                                read
-			fi
-			;;
-	esac
-	# Actually perform the actions upon the tasks
-	case "$_TASKFZF_TASK_ACT" in
-		undo)
-			# Doesn't need arguments
-			task undo
-			;;
-		add)
-			# Needs no arguments but does need a prompt
-			echo "Add task:"
-			echo ---------
-			read -p "set tags or project? " attribute_args
-			read -p "Task description: " description_args
-			task "$attribute_args" add "$description_args"
-			;;
-		add-with-context)
-			context="$(sed 's/rc.context=\([^ ]\+\).*/\1/' "${current_filter}")"
-			case $context in
-				*-*)
-					print_taskwarrior_bug_info "$context"
-					;;
-				*)
-					context_attributes="$(task _get rc.context."$context")"
-					echo "Add task with attributes:"
-					echo "$context_attributes"
-					echo ---------
-					read -p "set additional attributes? " attribute_args
-					read -p "Task description: " description_args
-					task "$context_attributes" "$attribute_args" add "$description_args"
-			esac
-			;;
-		add-popup)
-			# Single-line fzf popup prompt. --print-query emits the typed
-			# query on accept; an empty item list lets the user just type.
-			description=$(printf '\n' | fzf --prompt='Task description: ' --print-query --bind='enter:accept' --no-sort --height=1 </dev/tty)
-			if [ -n "$description" ]; then
-				task add "$description"
-			else
-				echo "${basename}: Add cancelled." >&2
-			fi
-			;;
-		append|modify)
-			echo "Run command:"
-			read -p "task $tasks_args $_TASKFZF_TASK_ACT " args
-			task $tasks_args "$_TASKFZF_TASK_ACT" "$args"
-			;;
-		toggle)
-			# Dispatch to start or stop based on whether the task is
-			# already started. The presence of a 'start' timestamp is
-			# the canonical signal that the task is currently active.
-			first_task="${tasks_args%% *}"
-			start_ts=$(task _get "${first_task}.start" 2>/dev/null)
-			if [ -z "$start_ts" ]; then
-				task "$first_task" start
-			else
-				task "$first_task" stop
-			fi
-			;;
-		taskopen)
-			# Pass the selected task UUID(s) to taskopen.
-			taskopen $tasks_args
-			;;
-		*)
-			task $tasks_args "$_TASKFZF_TASK_ACT"
-			;;
-	esac
-	# Prints a banner for after action view - it's a dirty and dumb version of
-	# piping to less.
-	echo ---------------------------------------------------------------------------
-	exit $?
+  # We clear the screen from previous output so it'll be easy to see what
+  # taskwarrior printed when doing the actions below.
+  clear
+  # checks if the arguments given to the task are numbers only
+  if [ "$_TASKFZF_REPORT" = "all" ]; then
+    tasks_args=$(grep -o '[0-9a-f]\{8\}' $@ | tr '\n' ' ')
+  else
+    tasks_args=$(awk '{printf $1" "} END {printf "\n"}' $@)
+  fi
+  case "$tasks_args" in
+  *[!0-9\ ]*)
+    if [ "$_TASKFZF_REPORT" != "all" ]; then
+      echo "${basename}: chosen tasks: $tasks_args" >&2
+      echo "${basename}: Unless your report is 'all', you should use reports with numbers at their first columns." >&2
+      echo "${basename}: Please update your taskrc so all of your reports will print the task's ID/UUID at the left most column." >&2
+      echo "${basename}: Or, alternatively, choose a line that has a number in it's beginning." >&2
+      echo ---------------------------------------------------------------------------
+      echo Press any key to continue
+      read
+      exit 1
+    fi
+    ;;
+  esac
+  # Other actions (such as edit / append etc) can't be used upon multiple tasks
+  case "$_TASKFZF_TASK_ACT" in
+  modify | append)
+    if [ "$tasks_args" != "${tasks_args%% *}" ]; then
+      tasks_args="${tasks_args%% *}"
+      clear
+      echo "${basename}: WARNING: Only the first task ($tasks_args) will be used when $_TASKFZF_TASK_ACT -ing it." >&2
+      echo ---------------------------------------------------------------------------
+      echo Press any key to continue
+      read
+    fi
+    ;;
+  esac
+  # Actually perform the actions upon the tasks
+  case "$_TASKFZF_TASK_ACT" in
+  undo)
+    # Doesn't need arguments
+    task undo
+    ;;
+  add)
+    # Needs no arguments but does need a prompt
+    echo "Add task:"
+    echo ---------
+    read -p "set tags or project? " attribute_args
+    read -p "Task description: " description_args
+    task "$attribute_args" add "$description_args"
+    ;;
+  add-with-context)
+    context="$(sed 's/rc.context=\([^ ]\+\).*/\1/' "${current_filter}")"
+    case $context in
+    *-*)
+      print_taskwarrior_bug_info "$context"
+      ;;
+    *)
+      context_attributes="$(task _get rc.context."$context")"
+      echo "Add task with attributes:"
+      echo "$context_attributes"
+      echo ---------
+      read -p "set additional attributes? " attribute_args
+      read -p "Task description: " description_args
+      task "$context_attributes" "$attribute_args" add "$description_args"
+      ;;
+    esac
+    ;;
+  add-popup)
+    # Single-line fzf popup prompt. --print-query emits the typed
+    # query on accept; an empty item list lets the user just type.
+    description=$(printf '\n' | fzf --prompt='Task description: ' --print-query --bind='enter:accept' --no-sort --height=1 </dev/tty)
+    if [ -n "$description" ]; then
+      task add "$description"
+    else
+      echo "${basename}: Add cancelled." >&2
+    fi
+    ;;
+  append | modify)
+    echo "Run command:"
+    read -p "task $tasks_args $_TASKFZF_TASK_ACT " args
+    task $tasks_args "$_TASKFZF_TASK_ACT" "$args"
+    ;;
+  toggle)
+    # Dispatch to start or stop based on whether the task is
+    # already started. The presence of a 'start' timestamp is
+    # the canonical signal that the task is currently active.
+    first_task="${tasks_args%% *}"
+    start_ts=$(task _get "${first_task}.start" 2>/dev/null)
+    if [ -z "$start_ts" ]; then
+      task "$first_task" start
+    else
+      task "$first_task" stop
+    fi
+    ;;
+  taskopen)
+    # Pass the selected task UUID(s) to taskopen.
+    taskopen $tasks_args
+    ;;
+  *)
+    task $tasks_args "$_TASKFZF_TASK_ACT"
+    ;;
+  esac
+  # Prints a banner for after action view - it's a dirty and dumb version of
+  # piping to less.
+  echo ---------------------------------------------------------------------------
+  exit $?
 fi
 
 if [ -n "$_TASKFZF_LIST_CHANGE" ]; then
-	# We'll generate a tiny bit different string to save in our marker file in
-	# the case we are changing the report or the context
-	# Do NOT reintroduce an 'enter:execute@echo {1}@+abort' binding here.
-	# fzf's execute action hands its child the terminal, so the echoed
-	# selection goes to the tty and never reaches the command substitution
-	# below - it always captured the empty string. fzf's default enter
-	# (accept) writes the selection to fzf's own stdout, which is what a
-	# '$(...)' capture actually reads.
-	case $_TASKFZF_LIST_CHANGE in
-		report)
-			# The reports listing is 'name  description'; only the name is
-			# usable as a task argument.
-			picked="$($tw reports | sed '$d' | fzf --ansi --no-multi | awk '{print $1}')"
-			report_str="$picked"
-			;;
-		context)
-			picked="$($tw context | awk '$2 == "read" {print $1}' | fzf --ansi --no-multi)"
-			context_str="rc.context=$picked"
-			;;
-	esac
+  # We'll generate a tiny bit different string to save in our marker file in
+  # the case we are changing the report or the context
+  # Do NOT reintroduce an 'enter:execute@echo {1}@+abort' binding here.
+  # fzf's execute action hands its child the terminal, so the echoed
+  # selection goes to the tty and never reaches the command substitution
+  # below - it always captured the empty string. fzf's default enter
+  # (accept) writes the selection to fzf's own stdout, which is what a
+  # '$(...)' capture actually reads.
+  case $_TASKFZF_LIST_CHANGE in
+  report)
+    # The reports listing is 'name  description'; only the name is
+    # usable as a task argument.
+    picked="$($tw reports | sed '$d' | fzf --ansi --no-multi | awk '{print $1}')"
+    report_str="$picked"
+    ;;
+  context)
+    picked="$($tw context | awk '$2 == "read" {print $1}' | fzf --ansi --no-multi)"
+    context_str="rc.context=$picked"
+    ;;
+  esac
 
-	# An empty pick means the user cancelled (Esc / Ctrl-c). Writing the
-	# marker anyway would silently clear their current context or report.
-	if [ -z "$picked" ]; then
-		exit
-	fi
+  # An empty pick means the user cancelled (Esc / Ctrl-c). Writing the
+  # marker anyway would silently clear their current context or report.
+  if [ -z "$picked" ]; then
+    exit
+  fi
 
-	# We save the next command line arguments for the next, outer loop
-	echo "$context_str" "$report_str" > $current_filter
-	exit
+  # We save the next command line arguments for the next, outer loop
+  echo "$context_str" "$report_str" >$current_filter
+  exit
 fi
 
 if [ -n "$_TASKFZF_RELOAD" ]; then
-	filter="$(cat "$current_filter")"
-	output=$($tw $filter)
-	# If there's no output at all, fzf be unusable saying something like:
-	# [Command failed: env _TASKFZF_RELOAD=true ./taskfzf]
-	# Hence, we check it first and print a more gracefull message instead
-	if [ -n "$output" ]; then
-		echo "$output"
-	else
-		echo No tasks were found in filter $filter
-	fi
-	exit
+  filter="$(cat "$current_filter")"
+  output=$($tw $filter)
+  # If there's no output at all, fzf be unusable saying something like:
+  # [Command failed: env _TASKFZF_RELOAD=true ./taskfzf]
+  # Hence, we check it first and print a more gracefull message instead
+  if [ -n "$output" ]; then
+    echo "$output"
+  else
+    echo No tasks were found in filter $filter
+  fi
+  exit
 fi
 
 # We remove the marker file so we'll be able to know once inside the loop
@@ -309,7 +306,7 @@ fi
 # if either of these variables is set and so we let go the outer loop continue
 # to execute.
 if [ -z "${_TASKFZF_LIST_CHANGE+1}" ] && [ -z "${_TASKFZF_TASK_ACT+1}" ] && [ "${_TASKFZF_INTERNAL}" != "reload" ]; then
-	rm -f $current_filter
+  rm -f $current_filter
 fi
 
 # -------------------------
@@ -324,59 +321,59 @@ fi
 # While Ctrl-c wasn't pressed inside fzf
 while [ $? != 130 ]; do
 
-	# If the marker file does exists, it's because the variables
-	# _TASKFZF_TASK_ACT / _TASKFZF_LIST_CHANGE or _TASKFZF_INTERNAL were set.
-	# That's why we get the arguments for tw from there.
-	if [ -w "$current_filter" ]; then
-		tw_args="$(cat $current_filter)"
-	else
-		# otherwise, we can rest assure this is the initial run of this program and so: 
-		tw_args="$@"
-		# Save the current filter used as in our marker file for the next execution
-		echo "$tw_args" > $current_filter
-	fi
+  # If the marker file does exists, it's because the variables
+  # _TASKFZF_TASK_ACT / _TASKFZF_LIST_CHANGE or _TASKFZF_INTERNAL were set.
+  # That's why we get the arguments for tw from there.
+  if [ -w "$current_filter" ]; then
+    tw_args="$(cat $current_filter)"
+  else
+    # otherwise, we can rest assure this is the initial run of this program and so:
+    tw_args="$@"
+    # Save the current filter used as in our marker file for the next execution
+    echo "$tw_args" >$current_filter
+  fi
 
-	# all is a type of report we need to apply some heuristics to, we at least
-	# try to detect it as so, see
-	# https://gitlab.com/doronbehar/taskwarrior-fzf/-/issues/8#note_339724564
-	case "$tw_args" in
-		*all*) export _TASKFZF_REPORT=all ;;
-	esac
-	# If we are supposed to reload the list, we count on the if procedure of
-	# current_filter to load the current arguments in $tw_args, and we use it
-	# here
-	if [ "${_TASKFZF_INTERNAL}" = "reload" ]; then
-		$tw $tw_args
-		exit $?
-	fi
-	# A few things to notice: 
-	# 
-	# - See https://github.com/junegunn/fzf/issues/1593#issuecomment-498007983
-	# for an explanation of that tty redirection.
-	#
-	# - We add a 'reload' action after 'execute' so fzf stays alive and
-	# refreshes the task list after each action. The reload command runs
-	# this same script with _TASKFZF_RELOAD=true, which prints the current
-	# filter's task list to stdout; fzf re-reads it as new input.
-	#
-	# - All --bind lines are generated programmatically from BINDINGS_DATA
-	# via gen_all_binds(); see the single source of truth at the top of
-	# the file. Adding / removing / renaming a binding happens there and
-	# only there.
-	# Build fzf --bind arguments without word-splitting on the spaces inside
-	# each execute(...) payload. gen_all_binds emits one binding per line;
-	# restricting IFS to newlines (and disabling globs) maps each line to
-	# exactly one positional parameter, so every binding reaches fzf intact.
-	old_IFS=$IFS
-	IFS='
+  # all is a type of report we need to apply some heuristics to, we at least
+  # try to detect it as so, see
+  # https://gitlab.com/doronbehar/taskwarrior-fzf/-/issues/8#note_339724564
+  case "$tw_args" in
+  *all*) export _TASKFZF_REPORT=all ;;
+  esac
+  # If we are supposed to reload the list, we count on the if procedure of
+  # current_filter to load the current arguments in $tw_args, and we use it
+  # here
+  if [ "${_TASKFZF_INTERNAL}" = "reload" ]; then
+    $tw $tw_args
+    exit $?
+  fi
+  # A few things to notice:
+  #
+  # - See https://github.com/junegunn/fzf/issues/1593#issuecomment-498007983
+  # for an explanation of that tty redirection.
+  #
+  # - We add a 'reload' action after 'execute' so fzf stays alive and
+  # refreshes the task list after each action. The reload command runs
+  # this same script with _TASKFZF_RELOAD=true, which prints the current
+  # filter's task list to stdout; fzf re-reads it as new input.
+  #
+  # - All --bind lines are generated programmatically from BINDINGS_DATA
+  # via gen_all_binds(); see the single source of truth at the top of
+  # the file. Adding / removing / renaming a binding happens there and
+  # only there.
+  # Build fzf --bind arguments without word-splitting on the spaces inside
+  # each execute(...) payload. gen_all_binds emits one binding per line;
+  # restricting IFS to newlines (and disabling globs) maps each line to
+  # exactly one positional parameter, so every binding reaches fzf intact.
+  old_IFS=$IFS
+  IFS='
 '
-	set -f
-	# shellcheck disable=SC2086  # word splitting on newlines is intentional
-	set -- $(gen_all_binds)
-	set +f
-	IFS=$old_IFS
+  set -f
+  # shellcheck disable=SC2086  # word splitting on newlines is intentional
+  set -- $(gen_all_binds)
+  set +f
+  IFS=$old_IFS
 
-	$tw $tw_args | fzf --ansi --multi "$@"
-        # exit
-        exit
+  $tw $tw_args | fzf --ansi --multi "$@"
+  # exit
+  exit
 done

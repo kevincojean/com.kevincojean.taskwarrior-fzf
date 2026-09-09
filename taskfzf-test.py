@@ -62,14 +62,10 @@ class Binding(StrEnum):
 CURRENT_BINDINGS = frozenset({
     (Binding.D, Action.DO),
     (Binding.X, Action.DELETE),
-    (Binding.U_LOWER, Action.UNDO),
     (Binding.U_UPPER, Action.UNDO),
     (Binding.E_UPPER, Action.TASKOPEN),
-    (Binding.A_LOWER, Action.ADD_POPUP),
     (Binding.A_UPPER, Action.ADD_WITH_CONTEXT),
-    (Binding.E_LOWER, Action.TASKOPEN),
     (Binding.M, Action.MODIFY),
-    (Binding.S_LOWER, Action.TOGGLE),
     (Binding.S_UPPER, Action.TOGGLE),
     (Binding.R, "report"),
     (Binding.C, "context"),
@@ -78,7 +74,7 @@ CURRENT_BINDINGS = frozenset({
     (Binding.CTRL_SLASH, Action.INFORMATION),
 })
 
-REMOVED_BINDINGS = frozenset({"P", "T", "N", "ctrl-c", "I", "enter", "shift-c"})
+REMOVED_BINDINGS = frozenset({"P", "T", "N", "ctrl-c", "I", "enter", "shift-c", "u", "a", "e", "s"})
 
 
 HAS_TASK = shutil.which("task") is not None
