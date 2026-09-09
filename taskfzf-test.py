@@ -325,11 +325,17 @@ def test_given_context_set_when_I_invoked_then_task_added_with_context_attrs(scr
         scratch_env,
         env_overrides={EnvVar.TASK_ACT: Action.ADD_WITH_CONTEXT},
         args=["/dev/null"],
-        stdin="\nctx task ac10\n",
+        stdin="my actual description\nproject:home\n",
     )
     newest = _newest_task_id(scratch_env)
     project = _task_field(scratch_env, newest, "project")
-    assert project == "work", f"project={project!r} expected work on task {newest}"
+    assert project == "work", (
+        f"project={project!r} expected work on task {newest}; "
+        f"if project is 'home' the second stdin line leaked into description_args, "
+        f"meaning add-with-context still has the legacy two-prompt flow"
+    )
+    desc = _task_field(scratch_env, newest, "description")
+    assert desc == "my actual description", f"description={desc!r} on task {newest}"
 
 
 @REQUIRES_TASK

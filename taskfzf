@@ -207,9 +207,8 @@ if [ -n "$_TASKFZF_TASK_ACT" ]; then
       echo "Add task with attributes:"
       echo "$context_attributes"
       echo ---------
-      read -p "set additional attributes? " attribute_args
       read -p "Task description: " description_args
-      task "$context_attributes" "$attribute_args" add "$description_args"
+      task "$context_attributes" add "$description_args"
       ;;
     esac
     ;;
