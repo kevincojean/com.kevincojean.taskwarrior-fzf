@@ -49,6 +49,7 @@ class Binding(StrEnum):
     A_LOWER = "a"
     A_UPPER = "A"
     E_LOWER = "e"
+    O = "O"
     M = "M"
     S_LOWER = "s"
     S_UPPER = "S"
@@ -63,7 +64,8 @@ CURRENT_BINDINGS = frozenset({
     (Binding.D, Action.DO),
     (Binding.X, Action.DELETE),
     (Binding.U_UPPER, Action.UNDO),
-    (Binding.E_UPPER, Action.TASKOPEN),
+    (Binding.E_UPPER, Action.EDIT),
+    (Binding.O, Action.TASKOPEN),
     (Binding.A_UPPER, Action.ADD_WITH_CONTEXT),
     (Binding.M, Action.MODIFY),
     (Binding.S_UPPER, Action.TOGGLE),
@@ -497,6 +499,32 @@ def test_given_bindings_data_when_parsed_then_includes_new_keys(taskfzf_path: Pa
         data_keys.add(key)
     for new_key in ("U", "S", "ctrl-/"):
         assert new_key in data_keys, f"new binding {new_key!r} missing from BINDINGS_DATA"
+
+
+def test_given_bindings_data_when_E_parsed_then_maps_to_edit(taskfzf_path: Path):
+    body = _bindings_data_section(taskfzf_path)
+    for line in body.splitlines():
+        if not line.strip():
+            continue
+        kind, key, arg, _ = line.split("|", 3)
+        if key == "E":
+            assert kind == "task-act", f"E binding kind should be task-act, got {kind!r}"
+            assert arg == "edit", f"E binding should map to edit, got {arg!r}"
+            return
+    pytest.fail("E binding missing from BINDINGS_DATA")
+
+
+def test_given_bindings_data_when_O_parsed_then_maps_to_taskopen(taskfzf_path: Path):
+    body = _bindings_data_section(taskfzf_path)
+    for line in body.splitlines():
+        if not line.strip():
+            continue
+        kind, key, arg, _ = line.split("|", 3)
+        if key == "O":
+            assert kind == "task-act", f"O binding kind should be task-act, got {kind!r}"
+            assert arg == "taskopen", f"O binding should map to taskopen, got {arg!r}"
+            return
+    pytest.fail("O binding missing from BINDINGS_DATA")
 
 
 def test_given_taskfzf_script_when_inspected_then_uses_gen_all_binds(taskfzf_path: Path):

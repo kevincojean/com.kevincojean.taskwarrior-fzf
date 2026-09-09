@@ -39,6 +39,7 @@ the lists here explain a bit more.
 - `D` marks the tasks as done (`task do`).
 - `X` deletes the tasks (`task del`).
 - `E` edits the task in your editor (`task edit`).
+- `O` opens the selected task in [taskopen](https://github.com/ValiValpas/taskopen).
 - `I` adds a new task, with context of the currently highlighted task.
 - `A` appends a text to the tasks using a shell input (`task append`).
 - `M` modifies a task using a shell input (`task modify`).

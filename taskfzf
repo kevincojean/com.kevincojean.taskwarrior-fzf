@@ -52,7 +52,8 @@ BINDINGS_DATA='
 task-act|D|do|Mark tasks as Done
 task-act|X|delete|Delete tasks
 undo|U|-|Undo last action
-task-act|E|taskopen|Open first selected task in taskopen
+task-act|E|edit|Edit the task in your editor
+task-act|O|taskopen|Open first selected task in taskopen
 task-act|A|add-with-context|Add a new task, with context of the currently highlighted task
 task-act|M|modify|Modify the first selected task
 task-act|S|toggle|Toggle start/stop on first selected task
