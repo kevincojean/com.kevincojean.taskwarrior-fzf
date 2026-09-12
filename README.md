@@ -43,6 +43,7 @@ the lists here explain a bit more.
 - `I` adds a new task, with context of the currently highlighted task.
 - `A` appends a text to the tasks using a shell input (`task append`).
 - `M` modifies a task using a shell input (`task modify`).
+- `L` logs a new task that is already completed (`task <id> log`).
 
 > **IMPORTANT:** The script expects all reports to put in their 1st
 > column the task's number. You will get a warning when trying to perform

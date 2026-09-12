@@ -32,6 +32,7 @@ class Action(StrEnum):
     ADD_POPUP = "add-popup"
     APPEND = "append"
     MODIFY = "modify"
+    LOG = "log"
     START = "start"
     STOP = "stop"
     UNDO = "undo"
@@ -48,6 +49,7 @@ class Binding(StrEnum):
     A_UPPER = "A"
     O_UPPER = "O"
     M_UPPER = "M"
+    L_UPPER = "L"
     S_UPPER = "S"
     R_UPPER = "R"
     C_UPPER = "C"
@@ -64,6 +66,7 @@ CURRENT_BINDINGS = frozenset({
     (Binding.O_UPPER, Action.TASKOPEN),
     (Binding.A_UPPER, Action.ADD_WITH_CONTEXT),
     (Binding.M_UPPER, Action.MODIFY),
+    (Binding.L_UPPER, Action.LOG),
     (Binding.S_UPPER, Action.TOGGLE),
     (Binding.R_UPPER, "report"),
     (Binding.C_UPPER, "context"),
@@ -371,6 +374,28 @@ def test_given_pending_task_when_M_invoked_then_attribute_modified(scratch_env: 
 
 
 @REQUIRES_TASK
+def test_given_pending_task_when_L_invoked_then_new_completed_task_created(
+    scratch_env: dict[str, str],
+):
+    tid = _create_task(scratch_env, "ac-log seed")
+    fixture = Path(scratch_env["TASKDATA"]) / "fixture.txt"
+    fixture.write_text(f"{tid}\n")
+    run_taskfzf(
+        scratch_env,
+        env_overrides={EnvVar.TASK_ACT: Action.LOG},
+        args=[str(fixture)],
+        stdin="investigated flakiness\n",
+    )
+    proc = subprocess.run(
+        ["task", "completed", "rc.verbose=nothing", "rc.defaultwidth=0", "rc.defaultheight=0"],
+        capture_output=True, env=scratch_env, text=True, timeout=10,
+    )
+    assert "investigated flakiness" in proc.stdout, (
+        f"new completed task not found: stdout={proc.stdout!r} stderr={proc.stderr!r}"
+    )
+
+
+@REQUIRES_TASK
 def test_given_pending_task_when_s_toggle_invoked_then_started(scratch_env: dict[str, str]):
     # T-006: s toggle starts a pending task.
     tid = _create_task(scratch_env, "ac14 toggle start")
@@ -527,6 +552,19 @@ def test_given_bindings_data_when_O_parsed_then_maps_to_taskopen(taskfzf_path: P
             assert arg == "taskopen", f"O binding should map to taskopen, got {arg!r}"
             return
     pytest.fail("O binding missing from BINDINGS_DATA")
+
+
+def test_given_bindings_data_when_L_parsed_then_maps_to_log(taskfzf_path: Path):
+    body = _bindings_data_section(taskfzf_path)
+    for line in body.splitlines():
+        if not line.strip():
+            continue
+        kind, key, arg, _ = line.split("|", 3)
+        if key == "L":
+            assert kind == "task-act", f"L binding kind should be task-act, got {kind!r}"
+            assert arg == "log", f"L binding should map to log, got {arg!r}"
+            return
+    pytest.fail("L binding missing from BINDINGS_DATA")
 
 
 def test_given_taskfzf_script_when_inspected_then_uses_gen_all_binds(taskfzf_path: Path):

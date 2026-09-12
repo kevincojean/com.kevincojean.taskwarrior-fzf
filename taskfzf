@@ -52,6 +52,7 @@ BINDINGS_DATA='
 task-act|D|do|Mark tasks as Done
 task-act|X|delete|Delete tasks
 undo|U|-|Undo last action
+task-act|L|log|Log a new task
 task-act|E|edit|Edit the task in your editor
 task-act|O|taskopen|Open first selected task in taskopen
 task-act|A|add-with-context|Add a new task, with context of the currently highlighted task
@@ -226,6 +227,12 @@ if [ -n "$_TASKFZF_TASK_ACT" ]; then
     echo "Run command:"
     read -p "task $tasks_args $_TASKFZF_TASK_ACT " args
     task $tasks_args "$_TASKFZF_TASK_ACT" "$args"
+    ;;
+  log)
+    echo "Log entry:"
+    echo ---------
+    read -p "Log message: " log_args
+    task $tasks_args log "$log_args"
     ;;
   toggle)
     # Dispatch to start or stop based on whether the task is
